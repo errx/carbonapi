@@ -154,7 +154,7 @@ kolmogorovSmirnovTest2(series, series, windowSize) alias ksTest2()        |  not
 legendValue(seriesList, *valueTypes)                                      |  0.9.10 | Supported
 limit(seriesList, n)                                                      |  0.9.9  | Supported
 lineWidth(seriesList, width)                                              |  0.9.9  | Supported
-linearRegression(seriesList, startSourceAt=None, endSourceAt=None)        |  latest |
+linearRegression(seriesList, startSourceAt=None, endSourceAt=None)        |  latest | Supported (based on polyfit)
 linearRegressionAnalysis(series)                                          |  latest |
 logarithm(seriesList, base=10), alias log()                               |  0.9.10 | Supported
 lowestAverage(seriesList, n)                                              |  0.9.9  | Supported
