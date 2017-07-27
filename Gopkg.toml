@@ -58,3 +58,7 @@
 [[dependencies]]
   branch = "master"
   name = "go.uber.org/zap"
+
+[[dependencies]]
+  branch = "master"
+  name = "github.com/garyburd/redigo"
