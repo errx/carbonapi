@@ -20,6 +20,7 @@ import (
 	"github.com/gonum/matrix/mat64"
 	"github.com/mjibson/go-dsp/fft"
 	"github.com/wangjohn/quickselect"
+	"github.com/garyburd/redigo/redis"
 )
 
 // expression parser
@@ -570,7 +571,6 @@ var (
 var backref = regexp.MustCompile(`\\(\d+)`)
 
 func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData) ([]*MetricData, error) {
-
 	switch e.etype {
 	case etName:
 		return values[MetricRequest{Metric: e.target, From: from, Until: until}], nil
@@ -628,6 +628,28 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			r.IsAbsent = a.IsAbsent
 			return r
 		})
+	case "aliasByHash": // aliasByHash(seriesList, redisHashName)
+		arg, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+		redisHashName, err := getStringArg(e, 1)
+		if err != nil {
+			return nil, err
+		}
+		redisConnection, err := redis.Dial("tcp", "monitoring01:6379")
+		if err != nil {
+			return arg, nil
+		}
+		defer redisConnection.Close()
+
+		var results []*MetricData
+		for _, a := range arg {
+			r := *a
+			r.Name = aliasByHash(r.Name, redisHashName, redisConnection)
+			results = append(results, &r)
+		}
+		return results, nil
 
 	case "aliasByNode": // aliasByNode(seriesList, *nodes)
 		args, err := getSeriesArg(e.args[0], from, until, values)
