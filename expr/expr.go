@@ -404,6 +404,12 @@ func getIntervalArg(e *expr, n int, defaultSign int) (int32, error) {
 
 	return seconds, nil
 }
+func getIntervalArgDefault(e *expr, n int, defaultSign int, v int32) (int32, error) {
+	if len(e.args) <= n {
+		return v, nil
+	}
+	return getIntervalArg(e, n, defaultSign)
+}
 
 func getFloatArg(e *expr, n int) (float64, error) {
 	if len(e.args) <= n {
@@ -827,7 +833,6 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 				return fmt.Sprintf("asPercent(%s,%s)", a, b)
 			}
 		} else {
-			fmt.Printf("%v %v\n", len(e.args), len(arg))
 			return nil, errors.New("total must be either a constant or a series")
 		}
 
@@ -3173,6 +3178,46 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			r.Name = fmt.Sprintf("timeShift(%s,'%d')", a.Name, offs)
 			r.StartTime = a.StartTime - offs
 			r.StopTime = a.StopTime - offs
+			results = append(results, &r)
+		}
+		return results, nil
+
+	case "timeSlice": // timeSlice(seriesList, startSliceAt, endSliceAt='now')
+		start, err := getIntervalArg(e, 1, -1)
+		if err != nil {
+			return nil, err
+		}
+
+		end, err := getIntervalArgDefault(e, 2, -1, 0)
+		if err != nil {
+			return nil, err
+		}
+		now := int32(time.Now().Unix())
+		start += now
+		end += now
+		arg, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+
+		var results []*MetricData
+
+		for _, a := range arg {
+			r := *a
+			r.Name = fmt.Sprintf("timeSlice(%s, %d, %d)", a.Name, start, end)
+			r.Values = make([]float64, len(a.Values))
+			r.IsAbsent = make([]bool, len(a.Values))
+			curr := from
+
+			for i, v := range a.Values {
+				if curr < start || curr > end {
+					r.Values[i] = math.NaN()
+					r.IsAbsent[i] = true
+				} else {
+					r.Values[i] = v
+				}
+				curr += a.StepTime
+			}
 			results = append(results, &r)
 		}
 		return results, nil
