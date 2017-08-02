@@ -18,6 +18,7 @@ import (
 	"github.com/dustin/go-humanize"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/gonum/matrix/mat64"
+	"github.com/gonum/stat"
 	"github.com/mjibson/go-dsp/fft"
 	"github.com/wangjohn/quickselect"
 )
@@ -817,7 +818,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			   Second one - denominators
 
 			   For each of them we will compute numerator/denominator
-			 */
+			*/
 			numerators := e.args[:len(e.args)/2]
 			denominators := e.args[len(e.args)/2:]
 			for i := range numerators {
@@ -2887,57 +2888,47 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		if err != nil {
 			return nil, err
 		}
+		start := from
+		end := until
 
-		degree := 1
+		if len(e.args) > 2 {
+			endShift, err := getIntervalArg(e, 2, -1)
+			if err != nil {
+				return nil, err
+			}
+			end = until + endShift
+		}
+		if len(e.args) > 1 {
+			startShift, err := getIntervalArg(e, 1, -1)
+			if err != nil {
+				return nil, err
+			}
+			start = until + startShift
+		}
+		// TODO check work with different from/until params
 
 		var results []*MetricData
 
 		for _, a := range arg {
 			r := *a
-			if len(e.args) > 2 {
-				r.Name = fmt.Sprintf("linearRegression(%s,'%s','%s')", a.GetName(), e.args[1].valStr, e.args[2].valStr)
-			} else if len(e.args) > 1 {
-				r.Name = fmt.Sprintf("linearRegression(%s,'%s')", a.GetName(), e.args[2].valStr)
-			} else {
-				r.Name = fmt.Sprintf("linearRegression(%s)", a.GetName())
-			}
+			r.Name = fmt.Sprintf("linearRegression(%s, %d, %d)", a.GetName(), start, end)
+			fmt.Printf("linearRegression(%s, %d, %d)\n", a.GetName(), start, end)
 
-			r.Values = make([]float64, len(a.Values))
-			r.IsAbsent = make([]bool, len(r.Values))
-			r.StopTime = a.GetStopTime()
-
-			// Removing absent values from original dataset
-			nonNulls := make([]float64, 0)
+			lrV := make([]float64, 0)
+			lrI := make([]float64, 0)
+			curr := from
 			for i := range a.Values {
-				if !a.IsAbsent[i] {
-					nonNulls = append(nonNulls, a.Values[i])
+				if (curr >= start && curr <= end) && !a.IsAbsent[i] {
+					lrV = append(lrV, a.Values[i])
+					lrI = append(lrI, float64(i))
 				}
+				curr += a.StepTime
 			}
-			if len(nonNulls) < 2 {
-				for i := range r.IsAbsent {
-					r.IsAbsent[i] = true
-				}
-				results = append(results, &r)
-				continue
-			}
-
-			// STEP 1: Creating Vandermonde (X)
-			v := vandermonde(a.IsAbsent, degree)
-			// STEP 2: Creating (X^T * X)**-1
-			var t mat64.Dense
-			t.Mul(v.T(), v)
-			var i mat64.Dense
-			err := i.Inverse(&t)
-			if err != nil {
-				continue
-			}
-			// STEP 3: Creating I * X^T * y
-			var c mat64.Dense
-			c.Product(&i, v.T(), mat64.NewDense(len(nonNulls), 1, nonNulls))
-			// END OF STEPS
-
-			for i := range r.Values {
-				r.Values[i] = poly(float64(i), c.RawMatrix().Data...)
+			alpha, beta := stat.LinearRegression(lrI, lrV, nil, false)
+			r.IsAbsent = make([]bool, len(r.Values))
+			r.Values = make([]float64, len(a.Values))
+			for i := range a.Values {
+				r.Values[i] = alpha + float64(i)*beta
 			}
 			results = append(results, &r)
 		}
