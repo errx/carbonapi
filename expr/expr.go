@@ -3971,10 +3971,11 @@ type seriesFunc func(*MetricData, *MetricData) *MetricData
 
 func forEachSeriesDo(e *expr, from, until int32, values map[MetricRequest][]*MetricData, function seriesFunc) ([]*MetricData, error) {
 	arg, err := getSeriesArg(e.args[0], from, until, values)
-	if err != nil {
-		return nil, ErrMissingTimeseries
-	}
 	var results []*MetricData
+	if err != nil {
+		return results, nil
+		// return nil, ErrMissingTimeseries
+	}
 
 	for _, a := range arg {
 		r := *a
