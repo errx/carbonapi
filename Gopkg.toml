@@ -62,3 +62,7 @@
 [[dependencies]]
   branch = "master"
   name = "github.com/garyburd/redigo"
+
+[[dependencies]]
+  branch = "master"
+  name = "github.com/gonum/stats"
