@@ -2474,7 +2474,7 @@ func TestEvalExpression(t *testing.T) {
 				},
 			},
 			[]*MetricData{
-				makeResponse("linearRegression(metric1)",
+				makeResponse("linearRegression(metric1, 0, 1)",
 					[]float64{1, 2, 3, 4, 5, 6}, 1, now32),
 			},
 		},
@@ -3074,17 +3074,17 @@ func TestRewriteExpr(t *testing.T) {
 	now32 := int32(time.Now().Unix())
 
 	tests := []struct {
-		name string
-		e *expr
-		m map[MetricRequest][]*MetricData
-		rewritten bool
+		name       string
+		e          *expr
+		m          map[MetricRequest][]*MetricData
+		rewritten  bool
 		newTargets []string
 	}{
 		{
 			"ignore non-applyByNode",
 			&expr{
 				target: "sumSeries",
-				etype: etFunc,
+				etype:  etFunc,
 				args: []*expr{
 					{target: "metric*"},
 				},
@@ -3104,7 +3104,7 @@ func TestRewriteExpr(t *testing.T) {
 			"applyByNode",
 			&expr{
 				target: "applyByNode",
-				etype: etFunc,
+				etype:  etFunc,
 				args: []*expr{
 					{target: "metric*"},
 					{val: 1, etype: etConst},
@@ -3126,7 +3126,7 @@ func TestRewriteExpr(t *testing.T) {
 			"applyByNode",
 			&expr{
 				target: "applyByNode",
-				etype: etFunc,
+				etype:  etFunc,
 				args: []*expr{
 					{target: "metric*"},
 					{val: 1, etype: etConst},
@@ -3149,7 +3149,7 @@ func TestRewriteExpr(t *testing.T) {
 			"applyByNode",
 			&expr{
 				target: "applyByNode",
-				etype: etFunc,
+				etype:  etFunc,
 				args: []*expr{
 					{target: "foo.metric*"},
 					{val: 2, etype: etConst},
@@ -3190,7 +3190,7 @@ func TestRewriteExpr(t *testing.T) {
 		if len(tt.newTargets) != len(newTargets) {
 			targetsMatch = false
 		} else {
-			for i := range(tt.newTargets) {
+			for i := range tt.newTargets {
 				targetsMatch = targetsMatch && tt.newTargets[i] == newTargets[i]
 			}
 		}
