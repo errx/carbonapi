@@ -499,7 +499,6 @@ func getBoolNamedOrPosArgDefault(e *expr, k string, n int, b bool) (bool, error)
 	if a := getNamedArg(e, k); a != nil {
 		return doGetBoolArg(a)
 	}
-
 	return getBoolArgDefault(e, n, b)
 }
 
@@ -512,12 +511,17 @@ func getBoolArgDefault(e *expr, n int, b bool) (bool, error) {
 }
 
 func doGetBoolArg(e *expr) (bool, error) {
-	if e.etype != etName {
+	var trg string
+	if e.etype == etName {
+		// names go into 'target'
+		trg = e.target
+	} else if e.etype == etString {
+		trg = e.valStr
+	} else {
 		return false, ErrBadType
 	}
 
-	// names go into 'target'
-	switch e.target {
+	switch trg {
 	case "False", "false":
 		return false, nil
 	case "True", "true":
