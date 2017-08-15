@@ -2,6 +2,7 @@ package expr
 
 import (
 	"container/heap"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -626,6 +627,24 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		for _, a := range arg {
 			r := *a
 			r.Name = alias
+			results = append(results, &r)
+		}
+		return results, nil
+
+	case "aliasByBase64": // aliasByBase64(seriesList)
+		arg, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+
+		var results []*MetricData
+
+		for _, a := range arg {
+			r := *a
+			decoded, err := base64.StdEncoding.DecodeString(r.Name)
+			if err == nil {
+				r.Name = string(decoded)
+			}
 			results = append(results, &r)
 		}
 		return results, nil

@@ -984,6 +984,34 @@ func TestEvalExpression(t *testing.T) {
 		},
 		{
 			&expr{
+				target: "aliasByBase64",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "metric1"},
+				},
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric1", 0, 1}: {makeResponse("aGVsbG8=", []float64{1, 2, 3, 4, 5}, 1, now32)},
+			},
+			[]*MetricData{makeResponse("hello",
+				[]float64{1, 2, 3, 4, 5}, 1, now32)},
+		},
+		{
+			&expr{
+				target: "aliasByBase64",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "metric1"},
+				},
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric1", 0, 1}: {makeResponse("bad", []float64{1, 2, 3, 4, 5}, 1, now32)},
+			},
+			[]*MetricData{makeResponse("bad",
+				[]float64{1, 2, 3, 4, 5}, 1, now32)},
+		},
+		{
+			&expr{
 				target: "aliasByMetric",
 				etype:  etFunc,
 				args: []*expr{
