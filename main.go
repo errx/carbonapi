@@ -554,6 +554,9 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+	if val, ok := Config.rewriter[query]; ok {
+		query = val
+	}
 
 	if format == "" {
 		format = "treejson"
@@ -806,6 +809,11 @@ type graphiteConfig struct {
 	Prefix   string
 }
 
+type rewriteConfig struct {
+	From string
+	To   string
+}
+
 var Config = struct {
 	Logger          []zapwriter.Config `yaml:"logger"`
 	ZipperUrl       string             `yaml:"zipper"`
@@ -819,6 +827,7 @@ var Config = struct {
 	PidFile         string             `yaml:"pidFile"`
 	SendGlobsAsIs   bool               `yaml:"sendGlobsAsIs"`
 	MaxBatchSize    int                `yaml:"maxBatchSize"`
+	Rewrite         []rewriteConfig    `yaml:"rewrite"`
 
 	queryCache cache.BytesCache
 	findCache  cache.BytesCache
@@ -830,6 +839,9 @@ var Config = struct {
 
 	// Limiter limits concurrent zipper requests
 	limiter limiter
+
+	// Rewriter rewrites find queries
+	rewriter rewriter
 }{
 	ZipperUrl:     "http://localhost:8080",
 	Listen:        "[::]:8081",
@@ -904,6 +916,7 @@ func main() {
 	expvar.Publish("Config", expvar.Func(func() interface{} { return Config }))
 
 	Config.limiter = newLimiter(Config.Concurency)
+	Config.rewriter = newRewriter(Config.Rewrite)
 
 	if _, err := url.Parse(Config.ZipperUrl); err != nil {
 		logger.Fatal("unable to parze zipper", zap.Error(err))
