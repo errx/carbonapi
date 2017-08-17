@@ -847,7 +847,7 @@ var Config = struct {
 	// Limiter limits concurrent zipper requests
 	limiter limiter
 
-	// Rewriter rewrites find queries
+	// Rewriter rewrites queries before sending then to backend
 	rewriter rewriter
 }{
 	ZipperUrl:     "http://localhost:8080",
