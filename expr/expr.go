@@ -1257,8 +1257,13 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			return nil, err
 		}
 
-		if len(firstGroup) != len(secondGroup) {
-			return nil, fmt.Errorf("dividendSeriesList and divisorSeriesList argument must have equal length")
+		useMatching := len(firstGroup) != len(secondGroup)
+		var secondGroupMap map[string]*MetricData
+		if useMatching {
+			secondGroupMap = make(map[string]*MetricData, len(secondGroup))
+			for _, s := range secondGroup {
+				secondGroupMap[s.Name] = s
+			}
 		}
 		var namef string
 
@@ -1269,8 +1274,17 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		}
 
 		var results []*MetricData
+		var right *MetricData
+		var ok bool
 		for i, left := range firstGroup {
-			right := secondGroup[i]
+			if useMatching {
+				right, ok = secondGroupMap[left.Name]
+				if !ok {
+					continue
+				}
+			} else {
+				right = secondGroup[i]
+			}
 			if left.StepTime != right.StepTime || len(left.Values) != len(right.Values) {
 				return nil, fmt.Errorf("series %s must have the same length as %s", left.Name, right.Name)
 			}
