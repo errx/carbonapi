@@ -630,6 +630,10 @@ func findCompleter(globs pb.GlobResponse) ([]byte, error) {
 			Path: g.Path,
 		}
 
+		if strings.HasPrefix(g.Path, "_tag") {
+			continue
+		}
+
 		if g.IsLeaf {
 			c.IsLeaf = "1"
 		} else {
@@ -657,7 +661,9 @@ func findList(globs pb.GlobResponse) ([]byte, error) {
 	var b bytes.Buffer
 
 	for _, g := range globs.Matches {
-
+		if strings.HasPrefix(g.Path, "_tag") {
+			continue
+		}
 		var dot string
 		// make sure non-leaves end in one dot
 		if !g.IsLeaf && !strings.HasSuffix(g.Path, ".") {
@@ -695,7 +701,9 @@ func findTreejson(globs pb.GlobResponse) ([]byte, error) {
 	}
 
 	for _, g := range globs.Matches {
-
+		if strings.HasPrefix(g.Path, "_tag") {
+			continue
+		}
 		name := g.Path
 
 		if i := strings.LastIndex(name, "."); i != -1 {
