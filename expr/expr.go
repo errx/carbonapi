@@ -1268,7 +1268,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		var namef string
 
 		if diff {
-			namef = "diffSeries(%s, %s)"
+			namef = "diffSeries(%s,%s)"
 		} else {
 			namef = "divideSeries(%s,%s)"
 		}
