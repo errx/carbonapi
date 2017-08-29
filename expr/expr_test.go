@@ -1369,7 +1369,7 @@ func TestEvalExpression(t *testing.T) {
 				{"metric2", 0, 1}: {makeResponse("metric2", []float64{2, math.NaN(), 3, math.NaN(), 0, 6}, 1, now32)},
 			},
 			[]*MetricData{makeResponse("diffSeries(metric1,metric2)",
-				[]float64{-1, math.NaN(), math.NaN(), math.NaN(), math.NaN(), 6}, 1, now32)},
+				[]float64{-1, math.NaN(), math.NaN(), math.NaN(), 4, 6}, 1, now32)},
 		},
 		{
 			&expr{

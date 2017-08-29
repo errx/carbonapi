@@ -1294,7 +1294,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			r.Values = make([]float64, len(left.Values))
 			r.IsAbsent = make([]bool, len(left.Values))
 			for i, v := range left.Values {
-				if left.IsAbsent[i] || right.IsAbsent[i] || right.Values[i] == 0 {
+				if left.IsAbsent[i] || right.IsAbsent[i] || (right.Values[i] == 0 && !diff) {
 					r.IsAbsent[i] = true
 					continue
 				}
