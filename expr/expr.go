@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/JaderDias/movingmedian"
-	"github.com/dgryski/go-onlinestats"
-	"github.com/dustin/go-humanize"
 	"github.com/garyburd/redigo/redis"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/gonum/matrix/mat64"
@@ -547,13 +545,21 @@ func getSeriesArg(arg *expr, from, until int32, values map[MetricRequest][]*Metr
 	return a, nil
 }
 
-func getSeriesArgs(e []*expr, from, until int32, values map[MetricRequest][]*MetricData) ([]*MetricData, error) {
+func removeEmptySeriesFromName(args []*MetricData) string {
+	var argNames []string
+	for _, arg := range args {
+		argNames = append(argNames, arg.Name)
+	}
 
+	return strings.Join(argNames, ",")
+}
+
+func getSeriesArgs(e []*expr, from, until int32, values map[MetricRequest][]*MetricData) ([]*MetricData, error) {
 	var args []*MetricData
 
 	for _, arg := range e {
 		a, err := getSeriesArg(arg, from, until, values)
-		if err != nil {
+		if err != nil && err != ErrSeriesDoesNotExist {
 			return nil, err
 		}
 		args = append(args, a...)
@@ -561,6 +567,22 @@ func getSeriesArgs(e []*expr, from, until int32, values map[MetricRequest][]*Met
 
 	if len(args) == 0 {
 		return nil, ErrSeriesDoesNotExist
+	}
+
+	return args, nil
+}
+
+// getSeriesArgsAndRemoveNonExisting will fetch all required arguments, but will also filter out non existing series
+// This is needed to be graphite-web compatible in cases when you pass non-existing series to, for example, sumSeries
+func getSeriesArgsAndRemoveNonExisting(e *expr, from, until int32, values map[MetricRequest][]*MetricData) ([]*MetricData, error) {
+	args, err := getSeriesArgs(e.args, from, until, values)
+	if err != nil {
+		return nil, err
+	}
+
+	// We need to rewrite name if there are some missing metrics
+	if len(args) < len(e.args) {
+		e.argString = removeEmptySeriesFromName(args)
 	}
 
 	return args, nil
@@ -934,7 +956,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		return results, nil
 
 	case "avg", "averageSeries": // averageSeries(*seriesLists)
-		args, err := getSeriesArgs(e.args, from, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -1084,7 +1106,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		})
 	case "countSeries": // countSeries(seriesList)
 		// TODO(civil): Check that series have equal length
-		args, err := getSeriesArgs(e.args, from, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -1102,6 +1124,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		return []*MetricData{&r}, nil
 
 	case "diffSeries": // diffSeries(*seriesLists)
+		// Because we treat 0 arg differently, we can't use getSeriesArgsAndRemoveNonExisting here.
 		minuends, err := getSeriesArg(e.args[0], from, until, values)
 		if err != nil {
 			return nil, err
@@ -1114,6 +1137,15 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			}
 			subtrahends = minuends[1:]
 			err = nil
+		}
+
+		// We need to rewrite name if there are some missing metrics
+		if len(subtrahends)+len(minuends) < len(e.args) {
+			args := []string{
+				removeEmptySeriesFromName(minuends),
+				removeEmptySeriesFromName(subtrahends),
+			}
+			e.argString = strings.Join(args, ",")
 		}
 
 		minuend := minuends[0]
@@ -1246,62 +1278,58 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 		return results, nil
 
-	case "divideSeriesLists", "diffSeriesLists": // divideSeriesLists(dividendSeriesList, divisorSeriesList)
-		diff := e.target == "diffSeriesLists"
-		firstGroup, err := getSeriesArg(e.args[0], from, until, values)
+	case "divideSeriesLists", "diffSeriesLists", "multiplySeriesLists": // divideSeriesLists(dividendSeriesList, divisorSeriesList)
+		numerators, err := getSeriesArg(e.args[0], from, until, values)
 		if err != nil {
 			return nil, err
 		}
-		secondGroup, err := getSeriesArg(e.args[1], from, until, values)
+		denominators, err := getSeriesArg(e.args[1], from, until, values)
 		if err != nil {
 			return nil, err
 		}
 
-		useMatching := len(firstGroup) != len(secondGroup)
-		var secondGroupMap map[string]*MetricData
-		if useMatching {
-			secondGroupMap = make(map[string]*MetricData, len(secondGroup))
-			for _, s := range secondGroup {
-				secondGroupMap[s.Name] = s
-			}
-		}
-		var namef string
-
-		if diff {
-			namef = "diffSeries(%s,%s)"
-		} else {
-			namef = "divideSeries(%s,%s)"
+		if len(numerators) != len(denominators) {
+			return nil, fmt.Errorf("Both %s arguments must have equal length", e.target)
 		}
 
 		var results []*MetricData
-		var right *MetricData
-		var ok bool
-		for i, left := range firstGroup {
-			if useMatching {
-				right, ok = secondGroupMap[left.Name]
-				if !ok {
-					continue
-				}
-			} else {
-				right = secondGroup[i]
-			}
-			if left.StepTime != right.StepTime || len(left.Values) != len(right.Values) {
-				return nil, fmt.Errorf("series %s must have the same length as %s", left.Name, right.Name)
-			}
-			r := *left
+		functionName := e.target[:len(e.target)-len("Lists")]
 
-			r.Name = fmt.Sprintf(namef, left.Name, right.Name)
-			r.Values = make([]float64, len(left.Values))
-			r.IsAbsent = make([]bool, len(left.Values))
-			for i, v := range left.Values {
-				if left.IsAbsent[i] || right.IsAbsent[i] || (right.Values[i] == 0 && !diff) {
+		var compute func(l, r float64) float64
+
+		switch e.target {
+		case "divideSeriesLists":
+			compute = func(l, r float64) float64 { return l / r }
+		case "multiplySeriesLists":
+			compute = func(l, r float64) float64 { return l * r }
+		case "diffSeriesLists":
+			compute = func(l, r float64) float64 { return l - r }
+
+		}
+		for i, numerator := range numerators {
+			denominator := denominators[i]
+			if numerator.StepTime != denominator.StepTime || len(numerator.Values) != len(denominator.Values) {
+				return nil, fmt.Errorf("series %s must have the same length as %s", numerator.Name, denominator.Name)
+			}
+			r := *numerator
+			r.Name = fmt.Sprintf("%s(%s,%s)", functionName, numerator.Name, denominator.Name)
+			r.Values = make([]float64, len(numerator.Values))
+			r.IsAbsent = make([]bool, len(numerator.Values))
+			for i, v := range numerator.Values {
+				if numerator.IsAbsent[i] || denominator.IsAbsent[i] {
 					r.IsAbsent[i] = true
 					continue
 				}
-				if diff {
-					r.Values[i] = v - right.Values[i]
-				} else {
-					r.Values[i] = v / right.Values[i]
+
+				switch e.target {
+				case "divideSeriesLists":
+					if denominator.Values[i] == 0 {
+						r.IsAbsent[i] = true
+						continue
+					}
+					r.Values[i] = compute(v, denominator.Values[i])
+				default:
+					r.Values[i] = compute(v, denominator.Values[i])
 				}
 			}
 			results = append(results, &r)
@@ -1556,7 +1584,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		return results, nil
 
 	case "group": // group(*seriesLists)
-		args, err := getSeriesArgs(e.args, from, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -2102,7 +2130,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		return results, nil
 
 	case "maxSeries": // maxSeries(*seriesLists)
-		args, err := getSeriesArgs(e.args, from, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -2118,7 +2146,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		})
 
 	case "minSeries": // minSeries(*seriesLists)
-		args, err := getSeriesArgs(e.args, from, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -2836,7 +2864,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 	case "sum", "sumSeries": // sumSeries(*seriesLists)
 		// TODO(dgryski): make sure the arrays are all the same 'size'
-		args, err := getSeriesArgs(e.args, from, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -3612,7 +3640,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 	case "holtWintersForecast":
 		var results []*MetricData
-		args, err := getSeriesArgs(e.args, from-7*86400, until, values)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from-7*86400, until, values)
 		if err != nil {
 			return nil, err
 		}
@@ -4067,6 +4095,7 @@ type aggregateFunc func([]float64) float64
 
 func aggregateSeries(e *expr, args []*MetricData, function aggregateFunc) ([]*MetricData, error) {
 	length := len(args[0].Values)
+
 	r := *args[0]
 	r.Name = fmt.Sprintf("%s(%s)", e.target, e.argString)
 	r.Values = make([]float64, length)

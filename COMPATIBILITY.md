@@ -127,10 +127,14 @@ derivative(seriesList)                                                    |  0.9
 diffSeries(*seriesLists)                                                  |  0.9.9  | Supported
 divideSeries(dividendSeriesList, divisorSeries)                           |  0.9.14 | Supported
 divideSeriesLists(dividendSeriesList, divisorSeriesList)                  |  1.0.2  | Supported
+diffSeriesLists(leftSeriesList, rightSeriesList)                          |  not in graphite  | Experimental
+multiplySeriesLists(leftSeriesList, rightSeriesList)                      |  not in graphite  | Experimental
 drawAsInfinite(seriesList)                                                |  0.9.9  | Supported
 events(*tags)                                                             |  0.9.9  |
 exclude(seriesList, pattern)                                              |  0.9.9  | Supported
 exponentialMovingAverage(seriesList, windowSize)                          |  1.0.0  |
+exponentialWeightedMovingAverage(seriesList, alpha)                       | not in graphite | Experimental
+ewma(seriesList, alpha)                                                   | - - -   | Short form of exponentialWeightedMovingAverage
 fallbackSeries( seriesList, fallback )                                    |  1.0.0  |
 [fft](https://en.wikipedia.org/wiki/Fast_Fourier_transform)(absSeriesList, phaseSeriesList)                                       |  not in graphite | Experimental
 grep(seriesList, pattern)                                                 |  1.0.0  | Supported
@@ -230,4 +234,3 @@ verticalLine(ts, label=None, color=None)                                  |  1.0
 weightedAverage(seriesListAvg, seriesListWeight, node)                    |  1.0.0  |
 
 -----
-
