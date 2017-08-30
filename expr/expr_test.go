@@ -3525,6 +3525,30 @@ func TestEvalMultipleReturns(t *testing.T) {
 		},
 		{
 			&expr{
+				target: "diffSeriesLists",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "metric[12]"},
+					{target: "metric2"},
+				},
+				argString: "metric[12],metric2",
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric[12]", 0, 1}: {
+					makeResponse("metric1", []float64{1, 2, 3, 4, 5}, 1, now32),
+					makeResponse("metric2", []float64{2, 4, 6, 8, 10}, 1, now32),
+				},
+				{"metric2", 0, 1}: {
+					makeResponse("metric2", []float64{2, 4, 6, 8, 10}, 1, now32),
+				},
+			},
+			"diffSeriesListMatching",
+			map[string][]*MetricData{
+				"diffSeries(metric2,metric2)": {makeResponse("diffSeries(metric2,metric2)", []float64{0, 0, 0, 0, 0}, 1, now32)},
+			},
+		},
+		{
+			&expr{
 				target: "sumSeriesWithWildcards",
 				etype:  etFunc,
 				args: []*expr{

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/JaderDias/movingmedian"
+	"github.com/dgryski/go-onlinestats"
+	"github.com/dustin/go-humanize"
 	"github.com/garyburd/redigo/redis"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/gonum/matrix/mat64"
@@ -1288,8 +1290,13 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			return nil, err
 		}
 
-		if len(numerators) != len(denominators) {
-			return nil, fmt.Errorf("Both %s arguments must have equal length", e.target)
+		useMatching := len(numerators) != len(denominators)
+		var denomMap map[string]*MetricData
+		if useMatching {
+			denomMap = make(map[string]*MetricData, len(denominators))
+			for _, s := range denominators {
+				denomMap[s.Name] = s
+			}
 		}
 
 		var results []*MetricData
@@ -1306,8 +1313,20 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			compute = func(l, r float64) float64 { return l - r }
 
 		}
+		var (
+			denominator *MetricData
+			ok          bool
+		)
+
 		for i, numerator := range numerators {
-			denominator := denominators[i]
+			if useMatching {
+				denominator, ok = denomMap[numerator.Name]
+				if !ok {
+					continue
+				}
+			} else {
+				denominator = denominators[i]
+			}
 			if numerator.StepTime != denominator.StepTime || len(numerator.Values) != len(denominator.Values) {
 				return nil, fmt.Errorf("series %s must have the same length as %s", numerator.Name, denominator.Name)
 			}
