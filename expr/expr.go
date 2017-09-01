@@ -4229,7 +4229,7 @@ func extractMetric(m string) string {
 			curlyBraces--
 		} else if m[end] == ')' || (m[end] == ',' && curlyBraces == 0) {
 			return m[start:end]
-		} else if !(isNameChar(m[end]) || m[end] == ',') {
+		} else if !(isNameChar(m[end]) || m[end] == ',' || m[end] == '#') {
 			start = end + 1
 		}
 
