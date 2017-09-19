@@ -2,12 +2,19 @@ package expr
 
 import (
 	"strings"
+
 	"github.com/garyburd/redigo/redis"
 )
 
 func redisGetHash(name string, key string, db int, c redis.Conn) (string, error) {
 	c.Do("SELECT", db)
 	v, err := c.Do("HGET", name, key)
+	return redis.String(v, err)
+}
+
+func redisGetKey(key string, db int, c redis.Conn) (string, error) {
+	c.Do("SELECT", db)
+	v, err := c.Do("GET", key)
 	return redis.String(v, err)
 }
 
@@ -51,7 +58,13 @@ func aliasByHash(metric string, redisHashName string, conn redis.Conn) string {
 		return redisName + suffix
 	} else {
 		key := prepareMetric(metric)
-		redisName, err := redisGetHash(redisHashName, key, 0, conn)
+		var err error
+		var redisName string
+		if redisHashName == "sql_query" {
+			redisName, err = redisGetKey(key, 5, conn)
+		} else {
+			redisName, err = redisGetHash(redisHashName, key, 0, conn)
+		}
 		if err != nil {
 			return metric
 		}
