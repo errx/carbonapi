@@ -59,10 +59,10 @@
   branch = "master"
   name = "go.uber.org/zap"
 
-[[dependencies]]
+[[constraint]]
   branch = "master"
   name = "github.com/garyburd/redigo"
 
-[[dependencies]]
+[[constraint]]
   branch = "master"
   name = "github.com/gonum/stats"

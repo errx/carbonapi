@@ -25,6 +25,8 @@ import (
 	"github.com/wangjohn/quickselect"
 )
 
+const anomalyPrefix = "resources.monitoring.anomaly_detector."
+
 // expression parser
 
 type exprType int
@@ -117,6 +119,14 @@ func (e *expr) Metrics() []MetricRequest {
 				for i := range r {
 					r[i].From -= offs
 				}
+			}
+		case "anomaly":
+			for _, v := range r {
+				r = append(r, MetricRequest{
+					Metric: anomalyPrefix + v.Metric,
+					From:   v.From,
+					Until:  v.Until,
+				})
 			}
 		}
 		return r
@@ -656,6 +666,22 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			results = append(results, &r)
 		}
 		return results, nil
+	case "anomaly": // alias(seriesList)
+		arg, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+		nname := anomalyPrefix + e.args[0].target
+		nReq := MetricRequest{Metric: nname, From: from, Until: until}
+		data, ok := values[nReq]
+		if ok {
+			for _, d := range data {
+				d.Name = strings.TrimPrefix(d.Name, anomalyPrefix)
+				d.Name = "[anomaly] " + d.Name
+				arg = append(arg, d)
+			}
+		}
+		return arg, nil
 
 	case "aliasByBase64": // aliasByBase64(seriesList)
 		arg, err := getSeriesArg(e.args[0], from, until, values)

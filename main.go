@@ -399,10 +399,12 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 						if r, err := Config.zipper.Render(ctx, path, from, until); err == nil {
 							rch <- r[0]
 						} else {
-							logger.Error("render error",
-								zap.String("target", path),
-								zap.Error(err),
-							)
+							if err != errNoMetrics {
+								logger.Error("render error",
+									zap.String("target", path),
+									zap.Error(err),
+								)
+							}
 							rch <- nil
 						}
 						Config.limiter.leave()
