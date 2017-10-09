@@ -666,22 +666,45 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			results = append(results, &r)
 		}
 		return results, nil
-	case "anomaly": // alias(seriesList)
+	case "anomaly": // anomaly(seriesList, empty=false)
 		arg, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+		empty, err := getBoolNamedOrPosArgDefault(e, "empty", 1, false)
 		if err != nil {
 			return nil, err
 		}
 		nname := anomalyPrefix + e.args[0].target
 		nReq := MetricRequest{Metric: nname, From: from, Until: until}
 		data, ok := values[nReq]
+		metricsToInclude := make(map[string]bool)
+		if !empty {
+			if ok {
+				for _, d := range data {
+					d.Name = strings.TrimPrefix(d.Name, anomalyPrefix)
+					d.Name = "[anomaly] " + d.Name
+					arg = append(arg, d)
+				}
+			}
+			return arg, nil
+		}
 		if ok {
 			for _, d := range data {
 				d.Name = strings.TrimPrefix(d.Name, anomalyPrefix)
+				metricsToInclude[d.Name] = true
 				d.Name = "[anomaly] " + d.Name
+				metricsToInclude[d.Name] = true
 				arg = append(arg, d)
 			}
 		}
-		return arg, nil
+		var results []*MetricData
+		for _, a := range arg {
+			if _,ok = metricsToInclude[a.Name]; ok {
+				results = append(results, a)
+			}
+		}
+		return results, nil
 
 	case "aliasByBase64": // aliasByBase64(seriesList)
 		arg, err := getSeriesArg(e.args[0], from, until, values)
