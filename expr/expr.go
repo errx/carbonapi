@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/JaderDias/movingmedian"
-	"github.com/dgryski/go-onlinestats"
-	"github.com/dustin/go-humanize"
 	"github.com/garyburd/redigo/redis"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/gonum/matrix/mat64"
@@ -77,7 +75,7 @@ func (e *expr) Metrics() []MetricRequest {
 				r[i].From += offs
 				r[i].Until += offs
 			}
-		case "timeStack":
+		case "timeStack", "baseline":
 			offs, err := getIntervalArg(e, 1, -1)
 			if err != nil {
 				return nil
@@ -619,6 +617,7 @@ var (
 var backref = regexp.MustCompile(`\\(\d+)`)
 
 func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData) ([]*MetricData, error) {
+
 	switch e.etype {
 	case etName:
 		return values[MetricRequest{Metric: e.target, From: from, Until: until}], nil
@@ -1358,7 +1357,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			return nil, err
 		}
 
-		useMatching := len(numerators) != len(denominators)
+		useMatching := true //len(numerators) != len(denominators)
 		var denomMap map[string]*MetricData
 		if useMatching {
 			denomMap = make(map[string]*MetricData, len(denominators))
@@ -3444,6 +3443,76 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 				r.StopTime = a.StopTime - offs
 				results = append(results, &r)
 			}
+		}
+
+		return results, nil
+	case "baseline": // baseline(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd)
+		unit, err := getIntervalArg(e, 1, -1)
+		if err != nil {
+			return nil, err
+		}
+
+		start, err := getIntArg(e, 2)
+		if err != nil {
+			return nil, err
+		}
+
+		end, err := getIntArg(e, 3)
+		if err != nil {
+			return nil, err
+		}
+
+		var results []*MetricData
+		groups := make(map[string][]*MetricData)
+		for i := int32(start); i < int32(end); i++ {
+			offs := i * unit
+			arg, _ := getSeriesArg(e.args[0], from+offs, until+offs, values)
+			// if err != nil {
+			// 	fmt.Printf("%v\n", values)
+			// 	return nil, err
+			// }
+
+			for _, a := range arg {
+				r := *a
+				r.StartTime = a.StartTime - offs
+				r.StopTime = a.StopTime - offs
+				groups[r.Name] = append(groups[r.Name], &r)
+			}
+		}
+
+		for name, args := range groups {
+			r := *args[0]
+			r.Name = fmt.Sprintf("baseline(%s)", name)
+			r.Values = make([]float64, len(args[0].Values))
+			r.IsAbsent = make([]bool, len(args[0].Values))
+
+			tmp := make([][]float64, len(args[0].Values)) // number of points
+			lengths := make([]int, len(args[0].Values))   // number of points with data
+			for i := 0; i < len(tmp); i++ {
+				tmp[i] = make([]float64, len(args)) // number of metrics
+			}
+
+			atLeastOne := make([]bool, len(args[0].Values))
+			for aindex, arg := range args {
+				for i, v := range arg.Values {
+					if arg.IsAbsent[i] {
+						continue
+					}
+					atLeastOne[i] = true
+					tmp[i] = append(tmp[i], v)
+					lengths[i]++
+				}
+			}
+
+			for i, v := range atLeastOne {
+				if v {
+					r.Values[i] = percentile(tmp[i][0:lengths[i]], 50, true)
+				} else {
+					r.IsAbsent[i] = true
+				}
+			}
+
+			results = append(results, &r)
 		}
 
 		return results, nil
