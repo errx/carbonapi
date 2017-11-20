@@ -671,37 +671,55 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		if err != nil {
 			return nil, err
 		}
-		empty, err := getBoolNamedOrPosArgDefault(e, "empty", 1, false)
+		joinType, err := getStringNamedOrPosArgDefault(e, "type", 1, "all")
 		if err != nil {
 			return nil, err
 		}
+		threshold, err := getFloatNamedOrPosArgDefault(e, "threshold", 2, math.NaN())
+		if err != nil {
+			return nil, err
+		}
+		// extract anomaly metrics
 		nname := anomalyPrefix + e.args[0].target
-		nReq := MetricRequest{Metric: nname, From: from, Until: until}
-		data, ok := values[nReq]
-		metricsToInclude := make(map[string]bool)
-		if !empty {
-			if ok {
-				for _, d := range data {
-					d.Name = strings.TrimPrefix(d.Name, anomalyPrefix)
-					d.Name = "[anomaly] " + d.Name
-					arg = append(arg, d)
-				}
-			}
-			return arg, nil
-		}
+		anomReq := MetricRequest{Metric: nname, From: from, Until: until}
+		anomalyData, ok := values[anomReq]
+
+		anomalyMap := make(map[string]*MetricData)
 		if ok {
-			for _, d := range data {
-				d.Name = strings.TrimPrefix(d.Name, anomalyPrefix)
-				metricsToInclude[d.Name] = true
-				d.Name = "[anomaly] " + d.Name
-				metricsToInclude[d.Name] = true
-				arg = append(arg, d)
+			for _, d := range anomalyData {
+				name := strings.TrimPrefix(d.Name, anomalyPrefix)
+				d.Name = fmt.Sprintf("[anomaly] %s", name)
+				anomalyMap[name] = d
 			}
 		}
+
 		var results []*MetricData
 		for _, a := range arg {
-			if _,ok = metricsToInclude[a.Name]; ok {
+			exclude := false
+			if !math.IsNaN(threshold) {
+				exclude = true
+				for i, v := range a.Values {
+					if !a.IsAbsent[i] && v > threshold {
+						exclude = false
+						break
+					}
+				}
+			}
+			if exclude {
+				continue
+			}
+			anomaly, hasAnomaly := anomalyMap[a.Name]
+			// include all metrics & anomalies
+			if joinType == "all" {
 				results = append(results, a)
+				if hasAnomaly {
+					results = append(results, anomaly)
+				}
+			} else if joinType == "with_anomalies_only" && hasAnomaly {
+				results = append(results, a)
+				results = append(results, anomaly)
+			} else if joinType == "only_anomalies" && hasAnomaly {
+				results = append(results, anomaly)
 			}
 		}
 		return results, nil
