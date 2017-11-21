@@ -26,7 +26,7 @@ Autobuilds (master, might be unstable): [Autobuild repo](https://packagecloud.io
 General information
 -------------------
 
-The only required parameter is the path to a config file. For an example see `carbonapi.example.yaml`
+Carbonzipper can be configured by environment variables or by config file. For an example see `carbonapi.example.yaml`
 
 `$ ./carbonapi -config /etc/carbonapi.yaml`
 
@@ -35,17 +35,76 @@ or if the GRAPHITEHOST/GRAPHITEPORT environment variables are found.
 
 Request data will be stored in memory (default) or in memcache.
 
+## Configuration by environment variables
+
+Every parameter in config file are mapped to environment variable. I.E.
+
+```yaml
+concurency: 20
+cache:
+   # Type of caching. Valid: "mem", "memcache", "null"
+   type: "mem"
+upstreams:
+    backends:
+        - "http://10.0.0.1:8080"
+        - "http://10.0.0.2:8080"
+```
+That config can be replaced by
+
+```bash
+CONCURENCY=20
+CACHE_TYPE=mem
+UPSTREAMS_BACKENDS="http://10.0.0.1:8080 http://10.0.0.2:8080"
+```
+
+You should be only aware of logging: because carbonapi support a list of logger, env variables will replace
+only first logger. 
+
+If you apply variable `LOGGER_FILE=stdout` to config:
+
+```yaml
+logger:
+    - logger: ""
+      file: "stderr"
+      level: "debug"
+      encoding: "console"
+      encodingTime: "iso8601"
+      encodingDuration: "seconds"
+    - logger: ""
+      file: "carbonapi.log"
+      level: "info"
+      encoding: "json"
+```
+
+it will be equal to config:
+
+```yaml
+logger:
+    - logger: ""
+      file: "stdout" # Changed only here
+      level: "debug"
+      encoding: "console"
+      encodingTime: "iso8601"
+      encodingDuration: "seconds"
+    - logger: ""
+      file: "carbonapi.log" # Not changed
+      level: "info"
+      encoding: "json"
+```
+
 
 Requirements
 ------------
 
+You need to have Go >= 1.8 to build carbonapi from sources. Building with Go 1.7 is not supported for versions >0.8.0
+
 CarbonAPI uses protobuf-based protocol to talk with underlying storages. For current version the compatibility list is:
 
 1. [carbonzipper](https://github.com/go-graphite/carbonzipper) >= 0.50
-2. [go-carbon](https://github.com/lomik/go-carbon) >= 0.9.0 (Note: you need to enable carbonserver in go-carbon). Limitations: /info handler won't work properly
-3. [carbonserver](https://github.com/grobian/carbonserver)@master (Note: you should probably switch to go-carbon in that case). Limitations: /info handler won't work properly
-4. [graphite-clickhouse](https://github.com/lomik/graphite-clickhouse) any. That's alternative storage that doesn't use Whisper. Limitations: /info handler won't work properly.
-5. [carbonapi](https://github.com/go-graphite/carbonapi) >= 0.5. Note: we are not sure if there is any point in running carbonapi over carbonapi at this moment.
+2. [go-carbon](https://github.com/lomik/go-carbon) >= 0.9.0 (Note: you need to enable carbonserver in go-carbon).
+3. [carbonserver](https://github.com/grobian/carbonserver)@master (Note: you should probably switch to go-carbon in that case).
+4. [graphite-clickhouse](https://github.com/lomik/graphite-clickhouse) any. That's alternative storage that doesn't use Whisper.
+5. [carbonapi](https://github.com/go-graphite/carbonapi) >= 0.5. Note: starting from carbonapi 3596e9647611e1f833a911d663747271623ec003 (post 0.8) carbonapi can be used as a zipper's replacement
 
 OSX Build Notes
 ---------------

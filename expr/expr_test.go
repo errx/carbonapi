@@ -1303,18 +1303,20 @@ func TestEvalExpression(t *testing.T) {
 				target: "asPercent",
 				etype:  etFunc,
 				args: []*expr{
-					{target: "metricA1"},
-					{target: "metricA2"},
-					{target: "metricB1"},
-					{target: "metricB2"},
+					{target: "metricA*"},
+					{target: "metricB*"},
 				},
 				argString: "metricA*,metricB*",
 			},
 			map[MetricRequest][]*MetricData{
-				{"metricA1", 0, 1}: {makeResponse("metricA1", []float64{1, 20, 10}, 1, now32)},
-				{"metricB1", 0, 1}: {makeResponse("metricB1", []float64{4, 4, 8}, 1, now32)},
-				{"metricA2", 0, 1}: {makeResponse("metricA2", []float64{1, 10, 20}, 1, now32)},
-				{"metricB2", 0, 1}: {makeResponse("metricB2", []float64{4, 16, 2}, 1, now32)},
+				{"metricA*", 0, 1}: {
+					makeResponse("metricA1", []float64{1, 20, 10}, 1, now32),
+					makeResponse("metricA2", []float64{1, 10, 20}, 1, now32),
+				},
+				{"metricB*", 0, 1}: {
+					makeResponse("metricB1", []float64{4, 4, 8}, 1, now32),
+					makeResponse("metricB2", []float64{4, 16, 2}, 1, now32),
+				},
 			},
 			[]*MetricData{makeResponse("asPercent(metricA1,metricB1)",
 				[]float64{25, 500, 125}, 1, now32),
@@ -1747,6 +1749,80 @@ func TestEvalExpression(t *testing.T) {
 			},
 			[]*MetricData{
 				makeResponse("ewma(metric1,0.9)", []float64{0, 0.9, 0.99, 0.999, math.NaN(), 0.9999, 0.99999}, 1, now32),
+			},
+		},
+		{
+			&expr{
+				target: "fallbackSeries",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "metric*"},
+					{target: "fallbackmetric"},
+				},
+				argString: "metric123*,fallbackmetric",
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric1", 0, 1}: {makeResponse("metric1", []float64{0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}, 1, now32)},
+				{"fallbackmetric", 0, 1}: {makeResponse("fallbackmetric", []float64{0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7}, 1, now32)},
+
+			},
+			[]*MetricData{
+				makeResponse("fallbackmetric", []float64{0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7}, 1, now32),
+			},
+		},
+		{
+			&expr{
+				target: "fallbackSeries",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "metric1"},
+					{target: "metric2"},
+				},
+				argString: "metric1,metric2",
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric1", 0, 1}: {makeResponse("metric1", []float64{0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}, 1, now32)},
+				{"metric2", 0, 1}: {makeResponse("metric2", []float64{0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7}, 1, now32)},
+
+			},
+			[]*MetricData{
+				makeResponse("metric1", []float64{0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}, 1, now32),
+			},
+		},
+		{
+			&expr{
+				target: "fallbackSeries",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "absentmetric"},
+					{target: "fallbackmetric"},
+				},
+				argString: "absentmetric,fallbackmetric",
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric1", 0, 1}: {makeResponse("metric1", []float64{0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}, 1, now32)},
+				{"fallbackmetric", 0, 1}: {makeResponse("fallbackmetric", []float64{0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7}, 1, now32)},
+
+			},
+			[]*MetricData{
+				makeResponse("fallbackmetric", []float64{0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7}, 1, now32),
+			},
+		},
+		{
+			&expr{
+				target: "fallbackSeries",
+				etype:  etFunc,
+				args: []*expr{
+					{target: "metric1"},
+					{target: "metric2"},
+				},
+				argString: "metric1,metric2",
+			},
+			map[MetricRequest][]*MetricData{
+				{"metric1", 0, 1}: {makeResponse("metric1", []float64{0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}, 1, now32)},
+			},
+			[]*MetricData{
+				makeResponse("metric1", []float64{0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}, 1, now32),
 			},
 		},
 		{

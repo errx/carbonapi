@@ -1,9 +1,4 @@
-#!/usr/bin/env bash
-VERSION=$(git describe --abbrev=4 --always --tags)
-TMPDIR=$(mktemp -d)
-
-DISTRO=$(lsb_release -i -s)
-RELEASE=$(lsb_release -r -s)
+#!/bin/bash -x
 
 die() {
     if [[ $1 -eq 0 ]]; then
@@ -14,6 +9,23 @@ die() {
     echo "$2"
     exit $1
 }
+
+VERSION=$(git describe --abbrev=6 --always --tags)
+echo "version: ${VERSION}"
+grep '^[0-9]\+\.[0-9]\.' <<< ${VERSION} || {
+	echo "Revision: $(git rev-parse HEAD)";
+	echo "Version: $(git describe --abbrev=6 --always --tags)";
+	echo "Known tags: $(git tag)";
+	echo;
+	echo;
+	die "Can't get latest version from git";
+}
+
+TMPDIR=$(mktemp -d)
+
+DISTRO=$(lsb_release -i -s)
+RELEASE=$(lsb_release -r -s)
+
 
 make || die 1 "Can't build package"
 make DESTDIR="${TMPDIR}" install || die 1 "Can't install package"

@@ -35,6 +35,7 @@ type graphOptions struct {
 	secondYAxis    bool
 	dashed         float64
 	hasAlpha       bool
+	hasLineWidth   bool
 	stacked        bool
 	stackName      string
 }
@@ -271,7 +272,7 @@ var xAxisConfigs = []xAxisStruct{
 		majorGridStep: 4,
 		labelUnit:     Hour,
 		labelStep:     4,
-		format:        "%a %I%p", // BUG(dgryski): should be %l, but limitation of strftime library
+		format:        "%a %H:%M",
 		maxInterval:   6 * Day,
 	},
 	{
@@ -282,7 +283,7 @@ var xAxisConfigs = []xAxisStruct{
 		majorGridStep: 12,
 		labelUnit:     Hour,
 		labelStep:     12,
-		format:        "%a %I%p", // BUG(dgryski): should be %l, but limitation of strftime library
+		format:        "%a %H:%M",
 		maxInterval:   10 * Day,
 	},
 	{
@@ -601,7 +602,7 @@ type Params struct {
 	yBottom        float64
 	ySpan          float64
 	graphHeight    float64
-	graphWidth     int
+	graphWidth     float64
 	yScaleFactor   float64
 	yUnitSystem    string
 	yDivisors      []float64
@@ -812,6 +813,28 @@ func evalExprGraph(e *expr, from, until int32, values map[MetricRequest][]*Metri
 		}
 		return results, nil
 
+	case "lineWidth": // lineWidth(seriesList, width)
+		arg, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+
+		width , err := getFloatArg(e, 1)
+		if err != nil {
+			return nil, err
+		}
+
+		var results []*MetricData
+
+		for _, a := range arg {
+			r := *a
+			r.lineWidth = width
+			r.hasLineWidth = true
+			results = append(results, &r)
+		}
+
+		return results, nil
+
 	case "threshold": // threshold(value, label=None, color=None)
 		// XXX does not match graphite's signature
 		// BUG(nnuss): the signature *does* match but there is an edge case because of named argument handling if you use it *just* wrong:
@@ -908,7 +931,7 @@ func marshalCairo(r *http.Request, results []*MetricData, backend cairoBackend) 
 		colorList: getStringArray(r.FormValue("colorList"), defaultColorList),
 		isPng:     true,
 
-		majorGridLineColor: getString(r.FormValue("majorGridLineColor"), "rose"),
+		majorGridLineColor: getString(r.FormValue("majorGridLineColor"), "white"),
 		minorGridLineColor: getString(r.FormValue("minorGridLineColor"), "grey"),
 
 		uniqueLegend:   getBool(r.FormValue("uniqueLegend"), false),
@@ -963,12 +986,10 @@ func marshalCairo(r *http.Request, results []*MetricData, backend cairoBackend) 
 	cr.context = cairo.Create(surface)
 
 	// Setting font parameters
-	/*
-		fontOpts := cairo.FontOptionsCreate()
-		cr.context.GetFontOptions(fontOpts)
-		fontOpts.SetAntialias(cairo.AntialiasGray)
-		cr.context.SetFontOptions(fontOpts)
-	*/
+
+	fontOpts := cairo.FontOptionsCreate()
+	fontOpts.SetAntialias(cairo.AntialiasNone)
+	cr.context.SetFontOptions(fontOpts)
 
 	setColor(&cr, params.bgColor)
 	drawRectangle(&cr, &params, 0, 0, params.width, params.height, true)
@@ -1075,12 +1096,14 @@ func drawGraph(cr *cairoSurfaceContext, params *Params, results []*MetricData) {
 		}
 		if params.secondYAxis && res.secondYAxis {
 			res.lineWidth = params.rightWidth
+			res.hasLineWidth = true
 			if params.rightDashed && res.dashed == 0 {
 				res.dashed = 2.5
 			}
 			res.color = params.rightColor
 		} else if params.secondYAxis {
 			res.lineWidth = params.leftWidth
+			res.hasLineWidth = true
 			if params.leftDashed && res.dashed == 0 {
 				res.dashed = 2.5
 			}
@@ -1151,6 +1174,12 @@ func drawGraph(cr *cairoSurfaceContext, params *Params, results []*MetricData) {
 		for _, r := range results {
 			r.stacked = true
 			r.stackName = "stack"
+		}
+	} else if params.areaMode == AreaModeFirst {
+		results[0].stacked = true
+	} else if params.areaMode == AreaModeAll {
+		for _, r := range results {
+			r.stacked = true
 		}
 	}
 
@@ -1233,7 +1262,7 @@ func drawGraph(cr *cairoSurfaceContext, params *Params, results []*MetricData) {
 
 func consolidateDataPoints(params *Params, results []*MetricData) {
 	numberOfPixels := params.area.xmax - params.area.xmin - (params.lineWidth + 1)
-	params.graphWidth = int(numberOfPixels)
+	params.graphWidth = numberOfPixels
 
 	for _, series := range results {
 		numberOfDataPoints := math.Floor(float64(params.timeRange / series.StepTime))
@@ -1519,16 +1548,16 @@ func setupTwoYAxes(cr *cairoSurfaceContext, params *Params, results []*MetricDat
 	params.yLabelWidthL = 0
 	for _, label := range params.yLabelsL {
 		t := getTextExtents(cr, label)
-		if t.Width > params.yLabelWidthL {
-			params.yLabelWidthL = t.Width
+		if t.XAdvance > params.yLabelWidthL {
+			params.yLabelWidthL = t.XAdvance
 		}
 	}
 
 	params.yLabelWidthR = 0
 	for _, label := range params.yLabelsR {
 		t := getTextExtents(cr, label)
-		if t.Width > params.yLabelWidthR {
-			params.yLabelWidthR = t.Width
+		if t.XAdvance > params.yLabelWidthR {
+			params.yLabelWidthR = t.XAdvance
 		}
 	}
 
@@ -1558,6 +1587,10 @@ func makeLabel(yValue, yStep, ySpan float64, yUnitSystem string) string {
 	yValue, prefix := formatUnits(yValue, yStep, yUnitSystem)
 	ySpan, spanPrefix := formatUnits(ySpan, yStep, yUnitSystem)
 
+	if prefix != "" {
+		prefix += " "
+	}
+
 	switch {
 	case yValue < 0.1:
 		return fmt.Sprintf("%.9g %s", yValue, prefix)
@@ -1567,11 +1600,11 @@ func makeLabel(yValue, yStep, ySpan float64, yUnitSystem string) string {
 		if yValue-math.Floor(yValue) < 0.00000000001 {
 			return fmt.Sprintf("%.1f %s", yValue, prefix)
 		}
-		return fmt.Sprintf("%d %s ", int(yValue), prefix)
+		return fmt.Sprintf("%d %s", int(yValue), prefix)
 	case ySpan > 3:
-		return fmt.Sprintf("%.1f %s ", yValue, prefix)
+		return fmt.Sprintf("%.1f %s", yValue, prefix)
 	case ySpan > 0.1:
-		return fmt.Sprintf("%.2f %s ", yValue, prefix)
+		return fmt.Sprintf("%.2f %s", yValue, prefix)
 	default:
 		return fmt.Sprintf("%g %s", yValue, prefix)
 	}
@@ -1677,7 +1710,7 @@ func setupYAxis(cr *cairoSurfaceContext, params *Params, results []*MetricData) 
 	if params.logBase != 0 {
 		if yMinValue > 0 {
 			params.yBottom = math.Pow(params.logBase, math.Floor(math.Log(yMinValue)/math.Log(params.logBase)))
-			params.yTop = math.Pow(params.logBase, math.Ceil(math.Log(yMaxValue/math.Log(params.logBase))))
+			params.yTop = math.Pow(params.logBase, math.Ceil(math.Log(yMaxValue)/math.Log(params.logBase)))
 		} else {
 			panic("logscale with minvalue <= 0")
 			// raise GraphError('Logarithmic scale specified with a dataset with a minimum value less than or equal to zero')
@@ -1719,8 +1752,8 @@ func setupYAxis(cr *cairoSurfaceContext, params *Params, results []*MetricData) 
 		params.yLabelWidth = 0
 		for _, label := range params.yLabels {
 			t := getTextExtents(cr, label)
-			if t.Width > params.yLabelWidth {
-				params.yLabelWidth = t.Width
+			if t.XAdvance > params.yLabelWidth {
+				params.yLabelWidth = t.XAdvance
 			}
 		}
 
@@ -1914,7 +1947,7 @@ func drawYAxis(cr *cairoSurfaceContext, params *Params, results []*MetricData) {
 				y = 0
 			}
 
-			x = params.area.xmax + float64(params.yLabelWidth)*0.02
+			x = params.area.xmax + float64(params.yLabelWidthR)*0.02 + 3
 			drawText(cr, params, label, x, y, HAlignLeft, VAlignCenter, 0)
 		}
 		return
@@ -2202,8 +2235,6 @@ func drawLines(cr *cairoSurfaceContext, params *Params, results []*MetricData) {
 	cr.context.SetLineCap(str2linecap(linecap))
 	cr.context.SetLineJoin(str2linejoin(linejoin))
 
-	// TODO(dgryski): areaMode all, first
-
 	if !math.IsNaN(params.areaAlpha) {
 		alpha := params.areaAlpha
 		var strokeSeries []*MetricData
@@ -2252,7 +2283,9 @@ func drawLines(cr *cairoSurfaceContext, params *Params, results []*MetricData) {
 			clipRestored = true
 		}
 
-		cr.context.SetLineWidth(params.lineWidth)
+		if series.hasLineWidth {
+			cr.context.SetLineWidth(series.lineWidth)
+		}
 
 		if series.dashed != 0 {
 			cr.context.SetDash([]float64{series.dashed}, 1)
@@ -2432,7 +2465,7 @@ func drawLegend(cr *cairoSurfaceContext, params *Params, results []*MetricData) 
 	testSizeName := longestName + " " + longestName
 	var textExtents cairo.TextExtents
 	cr.context.TextExtents(testSizeName, &textExtents)
-	testWidth := textExtents.Width + 2*(params.fontExtents.Height+padding)
+	testWidth := textExtents.XAdvance + 2*(params.fontExtents.Height+padding)
 	if testWidth+50 < params.width {
 		rightSideLabels = true
 	}
@@ -2440,7 +2473,7 @@ func drawLegend(cr *cairoSurfaceContext, params *Params, results []*MetricData) 
 	cr.context.TextExtents(longestName, &textExtents)
 	boxSize := params.fontExtents.Height - 1
 	lineHeight := params.fontExtents.Height + 1
-	labelWidth := textExtents.Width + 2*(boxSize+padding)
+	labelWidth := textExtents.XAdvance + 2*(boxSize+padding)
 	cr.context.SetLineWidth(1.0)
 	x := params.area.xmin
 
@@ -2490,7 +2523,7 @@ func drawLegend(cr *cairoSurfaceContext, params *Params, results []*MetricData) 
 	// else
 	columns := math.Max(1, math.Floor(params.width/labelWidth))
 	numberOfLines := math.Ceil(float64(len(results)) / columns)
-	legendHeight := numberOfLines * (lineHeight + padding)
+	legendHeight := (numberOfLines * lineHeight) + padding
 	params.area.ymax -= legendHeight
 	y := params.area.ymax + (2 * padding)
 	cnt := 0
@@ -2581,15 +2614,15 @@ func drawText(cr *cairoSurfaceContext, params *Params, text string, x, y float64
 	case HAlignLeft:
 		hAlign = 0.0
 	case HAlignCenter:
-		hAlign = textExtents.Width / 2.0
+		hAlign = textExtents.XAdvance / 2.0
 	case HAlignRight:
-		hAlign = textExtents.Width
+		hAlign = textExtents.XAdvance
 	}
 	switch valign {
 	case VAlignTop:
 		vAlign = fontExtents.Ascent
 	case VAlignCenter:
-		vAlign = fontExtents.Height/2.0 - fontExtents.Descent/2.0
+		vAlign = fontExtents.Height/2.0 - fontExtents.Descent
 	case VAlignBottom:
 		vAlign = -fontExtents.Descent
 	case VAlignBaseline:
@@ -2654,7 +2687,11 @@ func fillAreaAndClip(cr *cairoSurfaceContext, params *Params, x, y, startX, area
 	cr.context.LineTo(x, areaYFrom)      // bottom endX
 	cr.context.LineTo(startX, areaYFrom) // bottom startX
 	cr.context.ClosePath()
-	cr.context.Fill()
+	if params.areaMode == AreaModeAll {
+		cr.context.FillPreserve()
+	} else {
+		cr.context.Fill()
+	}
 
 	// clip above y axis
 	cr.context.AppendPath(pattern)
