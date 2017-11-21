@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/JaderDias/movingmedian"
+	onlinestats "github.com/dgryski/go-onlinestats"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/garyburd/redigo/redis"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/gonum/matrix/mat64"
