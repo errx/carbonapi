@@ -3566,14 +3566,13 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 					}
 				}
 				absPercent := float64(100*absCnt) / float64(len(r.IsAbsent))
-				fmt.Printf("%s %v %v\n", r.Name, maxAbsentPercent, absPercent)
 				if absPercent > maxAbsentPercent {
 					continue
 				}
 			}
 
 			if !math.IsNaN(minAvgLimit) {
-				if avgValueNan(r.Values, r.IsAbsent) < minAvgLimit {
+				if avgValueWithNan(r.Values, r.IsAbsent) < minAvgLimit {
 					continue
 				}
 			}
@@ -4598,7 +4597,7 @@ func avgValue(f64s []float64, absent []bool) float64 {
 	return t / float64(elts)
 }
 
-func avgValueNan(f64s []float64, absent []bool) float64 {
+func avgValueWithNan(f64s []float64, absent []bool) float64 {
 	var t float64
 	var elts int
 	for i, v := range f64s {
