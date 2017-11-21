@@ -1352,18 +1352,25 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		if err != nil {
 			return nil, err
 		}
-		denominators, err := getSeriesArg(e.args[1], from, until, values)
+
+		defaultValue, err := getFloatNamedOrPosArgDefault(e, "default", 3, math.NaN())
 		if err != nil {
 			return nil, err
 		}
 
-		useMatching := true //len(numerators) != len(denominators)
-		var denomMap map[string]*MetricData
-		if useMatching {
-			denomMap = make(map[string]*MetricData, len(denominators))
-			for _, s := range denominators {
-				denomMap[s.Name] = s
+		useConstant := false
+		denominators, err := getSeriesArg(e.args[1], from, until, values)
+		if err != nil {
+			if err == ErrSeriesDoesNotExist && !math.IsNaN(defaultValue) {
+				useConstant = true
+			} else {
+				return nil, err
 			}
+		}
+
+		useMatching, err := getBoolNamedOrPosArgDefault(e, "matching", 2, !useConstant && (len(denominators) != len(numerators)))
+		if err != nil {
+			return nil, err
 		}
 
 		var results []*MetricData
@@ -1378,8 +1385,45 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			compute = func(l, r float64) float64 { return l * r }
 		case "diffSeriesLists":
 			compute = func(l, r float64) float64 { return l - r }
-
 		}
+
+		if useConstant {
+			for _, numerator := range numerators {
+				r := *numerator
+				r.Name = fmt.Sprintf("%s(%s,%s)", functionName, numerator.Name, numerator.Name)
+				r.Values = make([]float64, len(numerator.Values))
+				r.IsAbsent = make([]bool, len(numerator.Values))
+				for i, v := range numerator.Values {
+					if numerator.IsAbsent[i] {
+						r.IsAbsent[i] = true
+						continue
+					}
+
+					switch e.target {
+					case "divideSeriesLists":
+						if defaultValue == 0 {
+							r.IsAbsent[i] = true
+							continue
+						}
+						r.Values[i] = compute(v, defaultValue)
+					default:
+
+						r.Values[i] = compute(v, defaultValue)
+					}
+				}
+				results = append(results, &r)
+			}
+			return results, nil
+		}
+
+		var denomMap map[string]*MetricData
+		if useMatching {
+			denomMap = make(map[string]*MetricData, len(denominators))
+			for _, s := range denominators {
+				denomMap[s.Name] = s
+			}
+		}
+
 		var (
 			denominator *MetricData
 			ok          bool
