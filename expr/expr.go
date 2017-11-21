@@ -3490,7 +3490,7 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		}
 
 		return results, nil
-	case "baseline": // baseline(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd)
+	case "baseline": // baseline(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd, [maxAbsentPercent, minAvgLimit])
 		unit, err := getIntervalArg(e, 1, -1)
 		if err != nil {
 			return nil, err
@@ -3506,16 +3506,20 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			return nil, err
 		}
 
+		maxAbsentPercent, err := getFloatArgDefault(e, 4, math.NaN())
+		if err != nil {
+			return nil, err
+		}
+		minAvgLimit, err := getFloatArgDefault(e, 5, math.NaN())
+		if err != nil {
+			return nil, err
+		}
+
 		var results []*MetricData
 		groups := make(map[string][]*MetricData)
 		for i := int32(start); i < int32(end); i++ {
 			offs := i * unit
 			arg, _ := getSeriesArg(e.args[0], from+offs, until+offs, values)
-			// if err != nil {
-			// 	fmt.Printf("%v\n", values)
-			// 	return nil, err
-			// }
-
 			for _, a := range arg {
 				r := *a
 				r.StartTime = a.StartTime - offs
@@ -3532,12 +3536,8 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 			tmp := make([][]float64, len(args[0].Values)) // number of points
 			lengths := make([]int, len(args[0].Values))   // number of points with data
-			for i := 0; i < len(tmp); i++ {
-				tmp[i] = make([]float64, len(args)) // number of metrics
-			}
-
 			atLeastOne := make([]bool, len(args[0].Values))
-			for aindex, arg := range args {
+			for _, arg := range args {
 				for i, v := range arg.Values {
 					if arg.IsAbsent[i] {
 						continue
@@ -3547,12 +3547,32 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 					lengths[i]++
 				}
 			}
-
 			for i, v := range atLeastOne {
 				if v {
 					r.Values[i] = percentile(tmp[i][0:lengths[i]], 50, true)
 				} else {
 					r.IsAbsent[i] = true
+				}
+			}
+
+			if !math.IsNaN(maxAbsentPercent) {
+
+				absCnt := 0
+				for _, a := range r.IsAbsent {
+					if a {
+						absCnt++
+					}
+				}
+				absPercent := float64(100*absCnt) / float64(len(r.IsAbsent))
+				fmt.Printf("%s %v %v\n", r.Name, maxAbsentPercent, absPercent)
+				if absPercent > maxAbsentPercent {
+					continue
+				}
+			}
+
+			if !math.IsNaN(minAvgLimit) {
+				if avgValueNan(r.Values, r.IsAbsent) < minAvgLimit {
+					continue
 				}
 			}
 
@@ -4571,6 +4591,19 @@ func avgValue(f64s []float64, absent []bool) float64 {
 			continue
 		}
 		elts++
+		t += v
+	}
+	return t / float64(elts)
+}
+
+func avgValueNan(f64s []float64, absent []bool) float64 {
+	var t float64
+	var elts int
+	for i, v := range f64s {
+		elts++
+		if absent[i] {
+			continue
+		}
 		t += v
 	}
 	return t / float64(elts)
