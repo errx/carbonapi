@@ -1358,20 +1358,27 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		return results, nil
 
 	case "divideSeriesLists", "diffSeriesLists", "multiplySeriesLists": // divideSeriesLists(dividendSeriesList, divisorSeriesList)
-		numerators, err := getSeriesArg(e.args[0], from, until, values)
-		if err != nil {
-			return nil, err
-		}
-
 		defaultValue, err := getFloatNamedOrPosArgDefault(e, "default", 3, math.NaN())
 		if err != nil {
 			return nil, err
 		}
 
 		useConstant := false
-		denominators, err := getSeriesArg(e.args[1], from, until, values)
+		useDenom := false
+
+		numerators, err := getSeriesArg(e.args[0], from, until, values)
 		if err != nil {
 			if err == ErrSeriesDoesNotExist && !math.IsNaN(defaultValue) {
+				useConstant = true
+				useDenom = true
+			} else {
+				return nil, err
+			}
+		}
+
+		denominators, err := getSeriesArg(e.args[1], from, until, values)
+		if err != nil {
+			if err == ErrSeriesDoesNotExist && !math.IsNaN(defaultValue) && !useConstant {
 				useConstant = true
 			} else {
 				return nil, err
@@ -1398,28 +1405,35 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		}
 
 		if useConstant {
-			for _, numerator := range numerators {
-				r := *numerator
-				r.Name = fmt.Sprintf("%s(%s,%s)", functionName, numerator.Name, numerator.Name)
-				r.Values = make([]float64, len(numerator.Values))
-				r.IsAbsent = make([]bool, len(numerator.Values))
-				for i, v := range numerator.Values {
-					if numerator.IsAbsent[i] {
+			var single []*MetricData
+			if useDenom {
+				single = denominators
+			} else {
+				single = numerators
+			}
+			for _, s := range single {
+				r := *s
+				r.Name = fmt.Sprintf("%s(%s,%s)", functionName, s.Name, s.Name)
+				r.Values = make([]float64, len(s.Values))
+				r.IsAbsent = make([]bool, len(s.Values))
+				for i, v := range s.Values {
+					if s.IsAbsent[i] {
 						r.IsAbsent[i] = true
 						continue
 					}
 
-					switch e.target {
-					case "divideSeriesLists":
-						if defaultValue == 0 {
+					if e.target == "divideSeriesLists" {
+						if (useDenom && v == 0) || (!useDenom && defaultValue == 0) {
 							r.IsAbsent[i] = true
 							continue
 						}
-						r.Values[i] = compute(v, defaultValue)
-					default:
-
+					}
+					if useDenom {
+						r.Values[i] = compute(defaultValue, v)
+					} else {
 						r.Values[i] = compute(v, defaultValue)
 					}
+
 				}
 				results = append(results, &r)
 			}
