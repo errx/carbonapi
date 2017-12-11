@@ -1061,6 +1061,20 @@ func TestEvalExpression(t *testing.T) {
 				target: "aliasByNode",
 				etype:  etFunc,
 				args: []*expr{
+					{target: "[anomaly] metric1.foo.bar.baz"},
+					{val: 1, etype: etConst},
+				},
+			},
+			map[MetricRequest][]*MetricData{
+				{"[anomaly] metric1.foo.bar.baz", 0, 1}: {makeResponse("[anomaly] metric1.foo.bar.baz", []float64{1, 2, 3, 4, 5}, 1, now32)},
+			},
+			[]*MetricData{makeResponse("[anomaly] foo", []float64{1, 2, 3, 4, 5}, 1, now32)},
+		},
+		{
+			&expr{
+				target: "aliasByNode",
+				etype:  etFunc,
+				args: []*expr{
 					{target: "metric1.foo.bar.baz"},
 					{val: 1, etype: etConst},
 					{val: 3, etype: etConst},

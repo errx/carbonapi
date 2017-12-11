@@ -789,8 +789,9 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		var results []*MetricData
 
 		for _, a := range args {
-
+			addAnomPrefix := strings.Contains(a.Name, "[anomaly] ")
 			metric := extractMetric(a.Name)
+
 			nodes := strings.Split(metric, ".")
 
 			var name []string
@@ -806,6 +807,10 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 			r := *a
 			r.Name = strings.Join(name, ".")
+			if addAnomPrefix {
+				r.Name = "[anomaly] " + r.Name
+			}
+
 			results = append(results, &r)
 		}
 
