@@ -680,6 +680,11 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		if err != nil {
 			return nil, err
 		}
+
+		offs, err := getIntervalArgDefault(e, 3, 1, -1)
+		if err != nil {
+			return nil, err
+		}
 		// extract anomaly metrics
 		nname := anomalyPrefix + e.args[0].target
 		anomReq := MetricRequest{Metric: nname, From: from, Until: until}
@@ -688,6 +693,22 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		anomalyMap := make(map[string]*MetricData)
 		if ok {
 			for _, d := range anomalyData {
+				if offs > 0 {
+					offPoints := (d.StopTime - offs - d.StartTime) / d.StepTime
+					if offPoints < 0 {
+						offPoints = 0
+					}
+					exclude := true
+					for _, v := range d.IsAbsent[offPoints:] {
+						if !v {
+							exclude = false
+							break
+						}
+					}
+					if exclude {
+						continue
+					}
+				}
 				name := strings.TrimPrefix(d.Name, anomalyPrefix)
 				d.Name = fmt.Sprintf("[anomaly] %s", name)
 				anomalyMap[name] = d
