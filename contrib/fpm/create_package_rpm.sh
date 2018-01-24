@@ -1,16 +1,4 @@
-#!/usr/bin/env bash
-VERSION_GIT=$(git describe --abbrev=4 --always --tags | rev | sed 's/-/./' | rev) 
-VERSION=$(cut -d'-' -f 1 <<< ${VERSION_GIT})
-RELEASE=$(cut -d'-' -f 2 <<< ${VERSION_GIT})
-if [[ "${VERSION}" == "${RELEASE}" ]]; then
-       RELEASE="1"
-else
-       REL_VERSION=$(cut -d'.' -f 1 <<< ${RELEASE})
-       REL_COMMIT=$(cut -d'.' -f 2 <<< ${RELEASE})
-       RELEASE="$((REL_VERSION+1)).${REL_COMMIT}"
-fi
-TMPDIR=$(mktemp -d)
-
+#!/bin/bash -x
 die() {
     if [[ $1 -eq 0 ]]; then
         rm -rf "${TMPDIR}"
@@ -20,6 +8,28 @@ die() {
     echo "$2"
     exit $1
 }
+
+pwd
+VERSION_GIT=$(git describe --abbrev=6 --always --tags | rev | sed 's/-/./' | rev) 
+VERSION=$(cut -d'-' -f 1 <<< ${VERSION_GIT})
+RELEASE=$(cut -d'-' -f 2 <<< ${VERSION_GIT})
+if [[ "${VERSION}" == "${RELEASE}" ]]; then
+       RELEASE="1"
+else
+       REL_VERSION=$(cut -d'.' -f 1 <<< ${RELEASE})
+       REL_COMMIT=$(cut -d'.' -f 2 <<< ${RELEASE})
+       RELEASE="$((REL_VERSION+1)).${REL_COMMIT}"
+fi
+grep '^[0-9]\+\.[0-9]\.' <<< ${VERSION} || {
+	echo "Revision: $(git rev-parse HEAD)";
+	echo "Version: $(git describe --abbrev=6 --always --tags)";
+	echo "Known tags: $(git tag)";
+	echo;
+	echo;
+	die "Can't get latest version from git";
+}
+
+TMPDIR=$(mktemp -d)
 
 make || die 1 "Can't build package"
 make DESTDIR="${TMPDIR}" install || die 1 "Can't install package"

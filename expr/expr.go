@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/JaderDias/movingmedian"
 	onlinestats "github.com/dgryski/go-onlinestats"
@@ -299,13 +301,20 @@ func parseConst(s string) (float64, string, error) {
 	return v, s[i:], err
 }
 
+// RangeTables is an array of *unicode.RangeTable
+var RangeTables []*unicode.RangeTable
+
 func parseName(s string) (string, string) {
 
-	var i int
+	var (
+		braces, i, w int
+		r            rune
+	)
 
 FOR:
-	for braces := 0; i < len(s); i++ {
+	for braces, i, w = 0, 0, 0; i < len(s); i += w {
 
+		w = 1
 		if isNameChar(s[i]) {
 			continue
 		}
@@ -316,7 +325,6 @@ FOR:
 		case '}':
 			if braces == 0 {
 				break FOR
-
 			}
 			braces--
 		case ',':
@@ -324,6 +332,10 @@ FOR:
 				break FOR
 			}
 		default:
+			r, w = utf8.DecodeRuneInString(s[i:])
+			if unicode.In(r, RangeTables...) {
+				continue
+			}
 			break FOR
 		}
 
@@ -549,10 +561,9 @@ func getSeriesArg(arg *expr, from, until int32, values map[MetricRequest][]*Metr
 		return nil, ErrMissingTimeseries
 	}
 
-	a, _ := EvalExpr(arg, from, until, values)
-
-	if len(a) == 0 {
-		return nil, ErrSeriesDoesNotExist
+	a, err := EvalExpr(arg, from, until, values)
+	if err != nil {
+		return nil, err
 	}
 
 	return a, nil
@@ -911,6 +922,8 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		var formatName func(a, b string) string
 		var totalString string
 		var multipleSeries bool
+		var numerators []*MetricData
+		var denominators []*MetricData
 
 		if len(e.args) == 1 {
 			getTotal = func(i int) float64 {
@@ -947,32 +960,29 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			if err != nil {
 				return nil, err
 			}
-			if len(total) != 1 {
+			if len(total) != 1 && len(total) != len(arg) {
 				return nil, ErrWildcardNotAllowed
 			}
-			getTotal = func(i int) float64 {
-				if total[0].IsAbsent[i] {
-					return math.NaN()
+			if len(total) == 1 {
+				getTotal = func(i int) float64 {
+					if total[0].IsAbsent[i] {
+						return math.NaN()
+					}
+					return total[0].Values[i]
 				}
-				return total[0].Values[i]
-			}
-			if e.args[1].etype == etName {
-				totalString = e.args[1].target
+				if e.args[1].etype == etName {
+					totalString = e.args[1].target
+				} else {
+					totalString = fmt.Sprintf("%s(%s)", e.args[1].target, e.args[1].argString)
+				}
 			} else {
-				totalString = fmt.Sprintf("%s(%s)", e.args[1].target, e.args[1].argString)
+				multipleSeries = true
+				numerators = arg
+				denominators = total
+				// Sort lists by name so that they match up.
+				sort.Sort(ByName(numerators))
+				sort.Sort(ByName(denominators))
 			}
-			formatName = func(a, b string) string {
-				return fmt.Sprintf("asPercent(%s,%s)", a, b)
-			}
-		} else if len(e.args)%2 == 0 && (e.args[1].etype == etName || e.args[1].etype == etFunc) {
-			total, err := getSeriesArg(e.args[1], from, until, values)
-			if err != nil {
-				return nil, err
-			}
-			if len(total) != len(arg) {
-				return nil, ErrWildcardNotAllowed
-			}
-			multipleSeries = true
 			formatName = func(a, b string) string {
 				return fmt.Sprintf("asPercent(%s,%s)", a, b)
 			}
@@ -989,39 +999,23 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 			   For each of them we will compute numerator/denominator
 			*/
-			numerators := e.args[:len(e.args)/2]
-			denominators := e.args[len(e.args)/2:]
 			for i := range numerators {
-				numerator, err := getSeriesArg(numerators[i], from, until, values)
-				if err != nil {
-					return nil, err
-				}
-				denominator, err := getSeriesArg(denominators[i], from, until, values)
-				if err != nil {
-					return nil, err
-				}
+				a := numerators[i]
+				b := denominators[i]
 
-				if len(numerator) != len(denominator) {
-					return nil, errors.New("Length mismatch, globs must return same amount of data")
-				}
-				for j := range numerator {
-					a := numerator[j]
-					b := denominator[j]
-
-					r := *a
-					r.Name = formatName(a.Name, b.Name)
-					r.Values = make([]float64, len(a.Values))
-					r.IsAbsent = make([]bool, len(a.Values))
-					for k := range a.Values {
-						if a.IsAbsent[k] || b.IsAbsent[k] {
-							r.Values[k] = 0
-							r.IsAbsent[k] = true
-							continue
-						}
-						r.Values[k] = (a.Values[k] / b.Values[k]) * 100
+				r := *a
+				r.Name = formatName(a.Name, b.Name)
+				r.Values = make([]float64, len(a.Values))
+				r.IsAbsent = make([]bool, len(a.Values))
+				for k := range a.Values {
+					if a.IsAbsent[k] || b.IsAbsent[k] {
+						r.Values[k] = 0
+						r.IsAbsent[k] = true
+						continue
 					}
-					results = append(results, &r)
+					r.Values[k] = (a.Values[k] / b.Values[k]) * 100
 				}
+				results = append(results, &r)
 			}
 		} else {
 			for _, a := range arg {
@@ -1189,18 +1183,14 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 	case "derivative": // derivative(seriesList)
 		return forEachSeriesDo(e, from, until, values, func(a *MetricData, r *MetricData) *MetricData {
-			prev := a.Values[0]
-			start := 0
+			prev := math.NaN()
 			for i, v := range a.Values {
-				if !a.IsAbsent[i] {
-					prev = v
-					start = i
-					break
-				}
-			}
-			for i, v := range a.Values {
-				if i <= start || a.IsAbsent[i] {
+				if a.IsAbsent[i] {
 					r.IsAbsent[i] = true
+					continue
+				} else if math.IsNaN(prev) {
+					r.IsAbsent[i] = true
+					prev = v
 					continue
 				}
 
@@ -1554,6 +1544,102 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 
 		return []*MetricData{&r}, nil
 
+	case "multiplySeriesWithWildcards": // multiplySeriesWithWildcards(seriesList, *position)
+		/* TODO(dgryski): make sure the arrays are all the same 'size'
+		   (duplicated from sumSeriesWithWildcards because of similar logic but multiplication) */
+		args, err := getSeriesArg(e.args[0], from, until, values)
+		if err != nil {
+			return nil, err
+		}
+
+		fields, err := getIntArgs(e, 1)
+		if err != nil {
+			return nil, err
+		}
+
+		var results []*MetricData
+
+		nodeList := []string{}
+		groups := make(map[string][]*MetricData)
+
+		for _, a := range args {
+			metric := extractMetric(a.Name)
+			nodes := strings.Split(metric, ".")
+			var s []string
+			// Yes, this is O(n^2), but len(nodes) < 10 and len(fields) < 3
+			// Iterating an int slice is faster than a map for n ~ 30
+			// http://www.antoine.im/posts/someone_is_wrong_on_the_internet
+			for i, n := range nodes {
+				if !contains(fields, i) {
+					s = append(s, n)
+				}
+			}
+
+			node := strings.Join(s, ".")
+
+			if len(groups[node]) == 0 {
+				nodeList = append(nodeList, node)
+			}
+
+			groups[node] = append(groups[node], a)
+		}
+
+		for _, series := range nodeList {
+			args := groups[series]
+			r := *args[0]
+			r.Name = fmt.Sprintf("multiplySeriesWithWildcards(%s)", series)
+			r.Values = make([]float64, len(args[0].Values))
+			r.IsAbsent = make([]bool, len(args[0].Values))
+
+			atLeastOne := make([]bool, len(args[0].Values))
+			hasVal := make([]bool, len(args[0].Values))
+
+			for _, arg := range args {
+				for i, v := range arg.Values {
+					if arg.IsAbsent[i] {
+						continue
+					}
+
+					atLeastOne[i] = true
+					if hasVal[i] == false {
+						r.Values[i] = v
+						hasVal[i] = true
+					} else {
+						r.Values[i] *= v
+					}
+				}
+			}
+
+			for i, v := range atLeastOne {
+				if !v {
+					r.IsAbsent[i] = true
+				}
+			}
+
+			results = append(results, &r)
+		}
+		return results, nil
+
+	case "stddevSeries": // stddevSeries(*seriesLists)
+		args, err := getSeriesArgsAndRemoveNonExisting(e, from, until, values)
+		if err != nil {
+			return nil, err
+		}
+
+		e.target = "stddevSeries"
+		return aggregateSeries(e, args, func(values []float64) float64 {
+			sum := 0.0
+			diffSqr := 0.0
+			for _, value := range values {
+				sum += value
+			}
+			average := sum / float64(len(values))
+			for _, value := range values {
+				diffSqr += (value - average) * (value - average)
+			}
+			return math.Sqrt(diffSqr / float64(len(values)))
+		})
+
 	case "ewma", "exponentialWeightedMovingAverage": // ewma(seriesList, alpha)
 		arg, err := getSeriesArg(e.args[0], from, until, values)
 		if err != nil {
@@ -1591,6 +1677,22 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			results = append(results, &r)
 		}
 		return results, nil
+
+	case "fallbackSeries": // fallbackSeries( seriesList, fallback )
+		/*
+			Takes a wildcard seriesList, and a second fallback metric.
+			If the wildcard does not match any series, draws the fallback metric.
+		*/
+		seriesList, err := getSeriesArg(e.args[0], from, until, values)
+		fallback, errFallback := getSeriesArg(e.args[1], from, until, values)
+		if errFallback != nil && err != nil {
+			return nil, errFallback
+		}
+
+		if seriesList != nil && len(seriesList) > 0 {
+			return seriesList, nil
+		}
+		return fallback, nil
 
 	case "exclude": // exclude(seriesList, pattern)
 		arg, err := getSeriesArg(e.args[0], from, until, values)
@@ -3321,6 +3423,9 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		if err != nil {
 			return nil, err
 		}
+		if len(args) == 0 {
+			return nil, nil
+		}
 
 		bucketSize, err := getIntervalArg(e, 1, 1)
 		if err != nil {
@@ -4464,29 +4569,50 @@ func alignToBucketSize(start, stop, bucketSize int32) (int32, int32) {
 	return start, newStop
 }
 
-func extractMetric(m string) string {
+func extractMetric(s string) string {
 
-	// search for a metric name in `m'
-	// metric name is defined to be a series of name characters terminated by a comma
+	// search for a metric name in 's'
+	// metric name is defined to be a series of name characters terminated by a ',' or ')'
+	// work sample: bla(bla{bl,a}b[la,b]la) => bla{bl,a}b[la
 
-	start := 0
-	end := 0
-	curlyBraces := 0
-	for end < len(m) {
-		if m[end] == '{' {
-			curlyBraces++
-		} else if m[end] == '}' {
-			curlyBraces--
-		} else if m[end] == ')' || (m[end] == ',' && curlyBraces == 0) {
-			return m[start:end]
-		} else if !(isNameChar(m[end]) || m[end] == ',' || m[end] == '#') {
-			start = end + 1
+	var (
+		start, braces, i, w int
+		r                   rune
+	)
+
+FOR:
+	for braces, i, w = 0, 0, 0; i < len(s); i += w {
+
+		w = 1
+		if isNameChar(s[i]) {
+			continue
 		}
 
-		end++
+		switch s[i] {
+		case '{':
+			braces++
+		case '}':
+			if braces == 0 {
+				break FOR
+			}
+			braces--
+		case ',':
+			if braces == 0 {
+				break FOR
+			}
+		case ')':
+			break FOR
+		default:
+			r, w = utf8.DecodeRuneInString(s[i:])
+			if unicode.In(r, RangeTables...) {
+				continue
+			}
+			start = i + 1
+		}
+
 	}
 
-	return m[start:end]
+	return s[start:i]
 }
 
 func contains(a []int, i int) bool {
