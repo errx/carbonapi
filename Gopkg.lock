@@ -98,6 +98,12 @@
   version = "v1.4.7"
 
 [[projects]]
+  name = "github.com/garyburd/redigo"
+  packages = ["internal","redis"]
+  revision = "d1ed5c67e5794de818ea85e6b522fda02623a484"
+  version = "v1.4.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/go-graphite/carbonzipper"
   packages = ["cache","carbonzipperpb3","intervalset","limiter","mstats","pathcache","util/apictx","util/zipperctx","zipper"]
@@ -138,6 +144,12 @@
   name = "github.com/gonum/matrix"
   packages = [".","mat64"]
   revision = "dd6034299e4242c9f0ea36735e6d4264dfcb3f9f"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/gonum/stat"
+  packages = ["."]
+  revision = "40602ac931a7ab7f72cb1eff5ce1753a2d28d345"
 
 [[projects]]
   name = "github.com/gorilla/handlers"
@@ -286,6 +298,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "116faf379699947e10a79f0e2a0b6ee73de618a6ff472f3486f62122152eb20c"
+  inputs-digest = "3e5b25bde64713cf15afcbe3df4104ed045d3030d33619ab3aa33f99d353a54f"
   solver-name = "gps-cdcl"
   solver-version = 1

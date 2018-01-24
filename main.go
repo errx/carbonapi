@@ -376,7 +376,7 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	var targetIdx = 0
 	for targetIdx < len(targets) {
 		var target = targets[targetIdx]
-		for k, v := range Config.rewriter {
+		for k, v := range config.rewriter {
 			if strings.Contains(target, k) {
 				target = strings.Replace(target, k, v, 1)
 			}
@@ -629,7 +629,7 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 		logAsError = true
 		return
 	}
-	for k, v := range Config.rewriter {
+	for k, v := range config.rewriter {
 		if strings.Contains(query, k) {
 			query = strings.Replace(query, k, v, 1)
 		}
