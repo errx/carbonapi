@@ -405,105 +405,21 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			var glob pb.GlobResponse
-			var haveCacheData bool
+			accessLogDetails.SendGlobs = true
+			apiMetrics.RenderRequests.Add(1)
+			config.limiter.enter()
+			zipperRequests++
 
-			if useCache {
-				tc := time.Now()
-				response, err := config.findCache.Get(m.Metric)
-				td := time.Since(tc).Nanoseconds()
-				apiMetrics.FindCacheOverheadNS.Add(td)
-
-				if err == nil {
-					err := glob.Unmarshal(response)
-					haveCacheData = err == nil
-				}
-			}
-
-			if haveCacheData {
-				apiMetrics.FindCacheHits.Add(1)
-			} else {
-				apiMetrics.FindCacheMisses.Add(1)
-				var err error
-				apiMetrics.FindRequests.Add(1)
-				zipperRequests++
-
-				glob, err = config.zipper.Find(ctx, m.Metric)
-				if err != nil {
-					logger.Error("find error",
-						zap.String("metric", m.Metric),
-						zap.Error(err),
-					)
-					continue
-				}
-				b, err := glob.Marshal()
-				if err == nil {
-					tc := time.Now()
-					config.findCache.Set(m.Metric, b, 5*60)
-					td := time.Since(tc).Nanoseconds()
-					apiMetrics.FindCacheOverheadNS.Add(td)
-				}
-			}
-
-			var sendGlobs = config.SendGlobsAsIs && len(glob.Matches) < config.MaxBatchSize
-			accessLogDetails.SendGlobs = sendGlobs
-
-			if sendGlobs {
-				// Request is "small enough" -- send the entire thing as a render request
-
-				apiMetrics.RenderRequests.Add(1)
-				config.limiter.enter()
-				zipperRequests++
-
-				r, err := config.zipper.Render(ctx, m.Metric, mfetch.From, mfetch.Until)
-				if err != nil {
-					errors[target] = err.Error()
-					config.limiter.leave()
-					continue
-				}
+			r, err := config.zipper.Render(ctx, m.Metric, mfetch.From, mfetch.Until)
+			if err != nil {
+				errors[target] = err.Error()
 				config.limiter.leave()
-				metricMap[mfetch] = r
-				for i := range r {
-					size += r[i].Size()
-				}
-
-			} else {
-				// Request is "too large"; send render requests individually
-				// TODO(dgryski): group the render requests into batches
-				rch := make(chan *expr.MetricData, len(glob.Matches))
-				var leaves int
-				for _, m := range glob.Matches {
-					if !m.IsLeaf {
-						continue
-					}
-					leaves++
-
-					apiMetrics.RenderRequests.Add(1)
-					config.limiter.enter()
-					zipperRequests++
-
-					go func(path string, from, until int32) {
-						if r, err := config.zipper.Render(ctx, path, from, until); err == nil {
-							rch <- r[0]
-						} else {
-							if err != errNoMetrics {
-								logger.Error("render error",
-									zap.String("target", path),
-									zap.Error(err),
-								)
-							}
-							rch <- nil
-						}
-						config.limiter.leave()
-					}(m.Path, mfetch.From, mfetch.Until)
-				}
-
-				for i := 0; i < leaves; i++ {
-					if r := <-rch; r != nil {
-						size += r.Size()
-						metricMap[mfetch] = append(metricMap[mfetch], r)
-					}
-				}
+				continue
+			}
+			config.limiter.leave()
+			metricMap[mfetch] = r
+			for i := range r {
+				size += r[i].Size()
 			}
 
 			expr.SortMetrics(metricMap[mfetch], mfetch)
