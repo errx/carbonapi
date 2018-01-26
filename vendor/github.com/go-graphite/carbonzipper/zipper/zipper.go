@@ -637,6 +637,11 @@ func (z *Zipper) Render(ctx context.Context, logger *zap.Logger, target string, 
 			stats.CacheHits++
 		}
 
+		// tmp fix
+		if len(serverList) > 0 {
+			serverList = serverList[:1]
+		}
+
 		responses = z.multiGet(ctx, logger, serverList, rewrite.RequestURI(), stats)
 	}
 
