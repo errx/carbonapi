@@ -79,7 +79,7 @@ func (e *expr) Metrics() []MetricRequest {
 				r[i].From += offs
 				r[i].Until += offs
 			}
-		case "timeStack", "baseline":
+		case "timeStack", "baseline", "baselineAberration":
 			offs, err := getIntervalArg(e, 1, -1)
 			if err != nil {
 				return nil
@@ -104,6 +104,15 @@ func (e *expr) Metrics() []MetricRequest {
 						Until:  v.Until + (i * offs),
 					})
 				}
+
+				if start != 0 && e.target == "baselineAberration" {
+					r2 = append(r2, MetricRequest{
+						Metric: v.Metric,
+						From:   v.From,
+						Until:  v.Until,
+					})
+				}
+
 			}
 
 			return r2
@@ -3775,7 +3784,11 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 		}
 
 		return results, nil
-	case "baseline": // baseline(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd, [maxAbsentPercent, minAvgLimit])
+	case "baseline", "baselineAberration": // baseline(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd, [maxAbsentPercent, minAvgLimit])
+		isAberration := false
+		if e.target == "baselineAberration" {
+			isAberration = true
+		}
 		unit, err := getIntervalArg(e, 1, -1)
 		if err != nil {
 			return nil, err
@@ -3800,9 +3813,17 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			return nil, err
 		}
 
+		//scale, err := getFloatNamedOrPosArgDefault(e, "scale", 6, 1)
+		//if err != nil {
+		//	return nil, err
+		//}
+
 		var results []*MetricData
 		groups := make(map[string][]*MetricData)
 		for i := int32(start); i < int32(end); i++ {
+			if i == 0 {
+				continue
+			}
 			offs := i * unit
 			arg, _ := getSeriesArg(e.args[0], from+offs, until+offs, values)
 			for _, a := range arg {
@@ -3813,9 +3834,19 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			}
 		}
 
+		current := make(map[string]*MetricData)
+		arg, _ := getSeriesArg(e.args[0], from, until, values)
+		for _, a := range arg {
+			current[a.Name] = a
+		}
+
 		for name, args := range groups {
 			r := *args[0]
-			r.Name = fmt.Sprintf("baseline(%s)", name)
+			if isAberration {
+				r.Name = fmt.Sprintf("baselineAberration(%s)", name)
+			} else {
+				r.Name = fmt.Sprintf("baseline(%s)", name)
+			}
 			r.Values = make([]float64, len(args[0].Values))
 			r.IsAbsent = make([]bool, len(args[0].Values))
 
@@ -3832,30 +3863,37 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 					lengths[i]++
 				}
 			}
+
+			totalSum := 0.0
+			totalNotAbsent := 0
+			totalCnt := len(r.Values)
+
+
 			for i, v := range atLeastOne {
 				if v {
 					r.Values[i] = percentile(tmp[i][0:lengths[i]], 50, true)
+					totalSum += r.Values[i]
+					totalNotAbsent++
+					if isAberration && !current[name].IsAbsent[i] {
+						if r.Values[i] != 0 {
+							r.Values[i] = current[name].Values[i] / r.Values[i]
+						}
+					}
 				} else {
 					r.IsAbsent[i] = true
 				}
 			}
 
 			if !math.IsNaN(maxAbsentPercent) {
-
-				absCnt := 0
-				for _, a := range r.IsAbsent {
-					if a {
-						absCnt++
-					}
-				}
-				absPercent := float64(100*absCnt) / float64(len(r.IsAbsent))
-				if absPercent > maxAbsentPercent {
+				absentPercent := float64(100*(totalCnt-totalNotAbsent)) / float64(totalCnt)
+				if absentPercent > maxAbsentPercent {
 					continue
 				}
 			}
 
-			if !math.IsNaN(minAvgLimit) {
-				if avgValueWithNan(r.Values, r.IsAbsent) < minAvgLimit {
+			if !math.IsNaN(minAvgLimit) && (totalNotAbsent != 0) {
+				avg := totalSum / float64(totalNotAbsent)
+				if avg < minAvgLimit {
 					continue
 				}
 			}
@@ -4896,19 +4934,6 @@ func avgValue(f64s []float64, absent []bool) float64 {
 			continue
 		}
 		elts++
-		t += v
-	}
-	return t / float64(elts)
-}
-
-func avgValueWithNan(f64s []float64, absent []bool) float64 {
-	var t float64
-	var elts int
-	for i, v := range f64s {
-		elts++
-		if absent[i] {
-			continue
-		}
 		t += v
 	}
 	return t / float64(elts)
