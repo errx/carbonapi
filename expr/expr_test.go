@@ -1284,17 +1284,25 @@ func TestEvalExpression(t *testing.T) {
 			},
 			map[MetricRequest][]*MetricData{
 				{"servers.*.cpu.*", 0, 1}: {
-					makeResponse("servers.server1.cpu.*", []float64{1, 2, 3}, 1, now32),
-					makeResponse("servers.server2.cpu.*", []float64{6, 7, 8}, 1, now32),
-					makeResponse("servers.server3.cpu.*", []float64{9, 10, 11}, 1, now32),
-					makeResponse("servers.server4.cpu.*", []float64{12, 13, 14}, 1, now32),
+					makeResponse("servers.server1.cpu.valid", []float64{1, 2, 3}, 1, now32),
+					makeResponse("servers.server2.cpu.valid", []float64{6, 7, 8}, 1, now32),
+					makeResponse("servers.server1.cpu.total", []float64{1, 2, 4}, 1, now32),
+					makeResponse("servers.server2.cpu.total", []float64{5, 7, 8}, 1, now32),
+					makeResponse("servers.server3.cpu.valid", []float64{8, 10, 11}, 1, now32),
+					makeResponse("servers.server3.cpu.total", []float64{9, 10, 11}, 1, now32),
+					makeResponse("servers.server4.cpu.valid", []float64{11, 13, 14}, 1, now32),
+					makeResponse("servers.server4.cpu.total", []float64{12, 13, 14}, 1, now32),
 				},
 			},
 			[]*MetricData{
-				makeResponse("servers.server1.cpu.*", []float64{1, 2, 3}, 1, now32),
-				makeResponse("servers.server2.cpu.*", []float64{6, 7, 8}, 1, now32),
-				makeResponse("servers.server3.cpu.*", []float64{9, 10, 11}, 1, now32),
-				makeResponse("servers.server4.cpu.*", []float64{12, 13, 14}, 1, now32),
+				makeResponse("servers.server1.cpu.valid", []float64{1, 2, 3}, 1, now32),
+				makeResponse("servers.server1.cpu.total", []float64{1, 2, 4}, 1, now32),
+				makeResponse("servers.server2.cpu.valid", []float64{6, 7, 8}, 1, now32),
+				makeResponse("servers.server2.cpu.total", []float64{5, 7, 8}, 1, now32),
+				makeResponse("servers.server3.cpu.valid", []float64{8, 10, 11}, 1, now32),
+				makeResponse("servers.server3.cpu.total", []float64{9, 10, 11}, 1, now32),
+				makeResponse("servers.server4.cpu.valid", []float64{11, 13, 14}, 1, now32),
+				makeResponse("servers.server4.cpu.total", []float64{12, 13, 14}, 1, now32),
 			},
 		},
 		{
@@ -1639,6 +1647,38 @@ func TestEvalExpression(t *testing.T) {
 			},
 			[]*MetricData{makeResponse("transformNull(metric1)",
 				[]float64{1, 0, 0, 3, 4, 12}, 1, now32)},
+		},
+		{
+			&expr{
+				target: "reduceSeries",
+				etype: etFunc,
+				args: []*expr{
+					{
+						target: "mapSeries",
+						etype:  etFunc,
+						args: []*expr{
+							{target: "devops.service.*.filter.received.*.count"},
+							{val: 2, etype: etConst},
+						},
+					},
+					{valStr: "asPercent", etype: etString},
+					{val: 5, etype: etConst},
+					{valStr: "valid", etype: etString},
+					{valStr: "total", etype: etString},
+				},
+			},
+			map[MetricRequest][]*MetricData{
+				{"devops.service.*.filter.received.*.count", 0, 1}: {
+					makeResponse("devops.service.server1.filter.received.valid.count", []float64{2, 4, 8}, 1, now32),
+					makeResponse("devops.service.server1.filter.received.total.count", []float64{8, 2, 4}, 1, now32),
+					makeResponse("devops.service.server2.filter.received.valid.count", []float64{3, 9, 12}, 1, now32),
+					makeResponse("devops.service.server2.filter.received.total.count", []float64{12, 9, 3}, 1, now32),
+				},
+			},
+			[]*MetricData{
+				makeResponse("devops.service.server1.filter.received.reduce.asPercent.count", []float64{25, 200, 200}, 1, now32),
+				makeResponse("devops.service.server2.filter.received.reduce.asPercent.count", []float64{25, 100, 400}, 1, now32),
+			},
 		},
 		{
 			&expr{
