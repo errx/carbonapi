@@ -1498,8 +1498,8 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 				return nil, err
 			}
 		}
-
-		useMatching, err := getBoolNamedOrPosArgDefault(e, "matching", 2, !useConstant && (len(denominators) != len(numerators)))
+		sizeMatch := len(denominators) == len(numerators) || len(denominators) == 1
+		useMatching, err := getBoolNamedOrPosArgDefault(e, "matching", 2, !useConstant && !sizeMatch)
 		if err != nil {
 			return nil, err
 		}
@@ -1574,7 +1574,12 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 					continue
 				}
 			} else {
-				denominator = denominators[i]
+				if len(denominators) == 1 {
+					denominator = denominators[0]
+				} else {
+					denominator = denominators[i]
+
+				}
 			}
 			if numerator.StepTime != denominator.StepTime || len(numerator.Values) != len(denominator.Values) {
 				return nil, fmt.Errorf("series %s must have the same length as %s", numerator.Name, denominator.Name)
