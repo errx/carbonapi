@@ -3818,11 +3818,6 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			return nil, err
 		}
 
-		//scale, err := getFloatNamedOrPosArgDefault(e, "scale", 6, 1)
-		//if err != nil {
-		//	return nil, err
-		//}
-
 		var results []*MetricData
 		groups := make(map[string][]*MetricData)
 		for i := int32(start); i < int32(end); i++ {

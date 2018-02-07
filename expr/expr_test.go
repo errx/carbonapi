@@ -3698,6 +3698,7 @@ func TestEvalMultipleReturns(t *testing.T) {
 				args: []*expr{
 					{target: "metric[12]"},
 					{target: "metric2"},
+					{target: "true", etype: etName},
 				},
 				argString: "metric[12],metric2",
 			},
