@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-graphite/carbonapi/expr/functions/absolute"
 	"github.com/go-graphite/carbonapi/expr/functions/alias"
+	"github.com/go-graphite/carbonapi/expr/functions/aliasByBase64"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByHash"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByMetric"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByNode"
@@ -100,11 +101,13 @@ type initFunc struct {
 }
 
 func New(configs map[string]string) {
-	funcs := make([]initFunc, 0, 85)
+	funcs := make([]initFunc, 0, 86)
 
 	funcs = append(funcs, initFunc{name: "absolute", order: absolute.GetOrder(), f: absolute.New})
 
 	funcs = append(funcs, initFunc{name: "alias", order: alias.GetOrder(), f: alias.New})
+
+	funcs = append(funcs, initFunc{name: "aliasByBase64", order: aliasByBase64.GetOrder(), f: aliasByBase64.New})
 
 	funcs = append(funcs, initFunc{name: "aliasByHash", order: aliasByHash.GetOrder(), f: aliasByHash.New})
 
