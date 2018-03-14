@@ -101,6 +101,15 @@
   version = "v1.4.7"
 
 [[projects]]
+  name = "github.com/garyburd/redigo"
+  packages = [
+    "internal",
+    "redis"
+  ]
+  revision = "a69d19351219b6dd56f274f96d85a7014a2ec34e"
+  version = "v1.6.0"
+
+[[projects]]
   name = "github.com/go-graphite/carbonzipper"
   packages = [
     "cache",
@@ -348,6 +357,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b4a8d33859a59f1934459752cfbae419e4633834e3441894b5d980c8b8368991"
+  inputs-digest = "24360f196a6267eeed1e46170a38abad0212544eaddc067dc64611dd2954c325"
   solver-name = "gps-cdcl"
   solver-version = 1
