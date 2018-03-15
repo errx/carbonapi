@@ -211,7 +211,7 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 
 	// normalize from and until values
 	qtz := r.FormValue("tz")
-	from32 := date.DateParamToEpoch(from, qtz, timeNow().Add(-24*time.Hour).Unix(), config.defaultTimeZone)
+	from32 := date.DateParamToEpoch(from, qtz, timeNow().Add(-24 * time.Hour).Unix(), config.defaultTimeZone)
 	until32 := date.DateParamToEpoch(until, qtz, timeNow().Unix(), config.defaultTimeZone)
 
 	accessLogDetails.UseCache = useCache
@@ -541,6 +541,9 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 
 		now := int32(time.Now().Unix() + 60)
 		for _, metric := range globs.Matches {
+			if strings.HasPrefix(metric.Path, "_tag") {
+				continue
+			}
 			// Tell graphite-web that we have everything
 			var mm map[string]interface{}
 			if config.GraphiteWeb09Compatibility {
@@ -590,6 +593,9 @@ func findCompleter(globs pb.GlobResponse) ([]byte, error) {
 	var complete = make([]completer, 0)
 
 	for _, g := range globs.Matches {
+		if strings.HasPrefix(g.Path, "_tag") {
+			continue
+		}
 		c := completer{
 			Path: g.Path,
 		}
@@ -623,6 +629,9 @@ func findList(globs pb.GlobResponse) ([]byte, error) {
 	var b bytes.Buffer
 
 	for _, g := range globs.Matches {
+		if strings.HasPrefix(g.Path, "_tag") {
+			continue
+		}
 
 		var dot string
 		// make sure non-leaves end in one dot
