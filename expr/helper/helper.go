@@ -98,10 +98,10 @@ type seriesFunc func(*types.MetricData, *types.MetricData) *types.MetricData
 // ForEachSeriesDo do action for each serie in list.
 func ForEachSeriesDo(e parser.Expr, from, until int32, values map[parser.MetricRequest][]*types.MetricData, function seriesFunc) ([]*types.MetricData, error) {
 	arg, err := GetSeriesArg(e.Args()[0], from, until, values)
-	if err != nil {
-		return nil, parser.ErrMissingTimeseries
-	}
 	var results []*types.MetricData
+	if err != nil {
+		return results, nil
+	}
 
 	for _, a := range arg {
 		r := *a
