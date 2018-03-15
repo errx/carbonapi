@@ -11,6 +11,7 @@ import (
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByMetric"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByNode"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasSub"
+	"github.com/go-graphite/carbonapi/expr/functions/anomaly"
 	"github.com/go-graphite/carbonapi/expr/functions/asPercent"
 	"github.com/go-graphite/carbonapi/expr/functions/averageSeries"
 	"github.com/go-graphite/carbonapi/expr/functions/averageSeriesWithWildcards"
@@ -101,7 +102,7 @@ type initFunc struct {
 }
 
 func New(configs map[string]string) {
-	funcs := make([]initFunc, 0, 86)
+	funcs := make([]initFunc, 0, 87)
 
 	funcs = append(funcs, initFunc{name: "absolute", order: absolute.GetOrder(), f: absolute.New})
 
@@ -116,6 +117,8 @@ func New(configs map[string]string) {
 	funcs = append(funcs, initFunc{name: "aliasByNode", order: aliasByNode.GetOrder(), f: aliasByNode.New})
 
 	funcs = append(funcs, initFunc{name: "aliasSub", order: aliasSub.GetOrder(), f: aliasSub.New})
+
+	funcs = append(funcs, initFunc{name: "anomaly", order: anomaly.GetOrder(), f: anomaly.New})
 
 	funcs = append(funcs, initFunc{name: "asPercent", order: asPercent.GetOrder(), f: asPercent.New})
 

@@ -11,6 +11,8 @@ import (
 
 // expression parser
 
+const anomalyPrefix = "resources.monitoring.anomaly_detector."
+
 type expr struct {
 	target    string
 	etype     ExprType
@@ -181,6 +183,15 @@ func (e *expr) Metrics() []MetricRequest {
 					r[i].From -= offs
 				}
 			}
+
+		case "anomaly":
+			for _, v := range r {
+				r = append(r, MetricRequest{
+					Metric: anomalyPrefix + v.Metric,
+					From:   v.From,
+					Until:  v.Until,
+				})
+			}
 		}
 		return r
 	}
@@ -203,6 +214,13 @@ func (e *expr) GetIntervalArg(n int, defaultSign int) (int32, error) {
 	}
 
 	return seconds, nil
+}
+
+func (e *expr) GetIntervalArgDefault(n int, defaultSign int, d int32) (int32, error) {
+	if len(e.args) <= n {
+		return d, nil
+	}
+	return e.GetIntervalArg(n, defaultSign)
 }
 
 func (e *expr) GetStringArg(n int) (string, error) {

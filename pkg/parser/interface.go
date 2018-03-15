@@ -95,6 +95,8 @@ type Expr interface {
 
 	// GetIntervalArg returns interval typed argument.
 	GetIntervalArg(n int, defaultSign int) (int32, error)
+	// GetIntervalArgDefault returns interval typed argument. It will replace it with Default value if none present.
+	GetIntervalArgDefault(n int, defaultSign int, d int32) (int32, error)
 
 	// GetIntervalArg returns n-th argument as string.
 	GetStringArg(n int) (string, error)

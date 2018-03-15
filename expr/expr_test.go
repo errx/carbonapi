@@ -524,6 +524,16 @@ func TestEvalExpression(t *testing.T) {
 				[]float64{1, 2, 3, 4, 5}, 1, now32)},
 		},
 		{
+			parser.NewExpr("aliasByNode",
+				"[anomaly] metric1.foo.bar.baz", 1, -2,
+			),
+			map[parser.MetricRequest][]*types.MetricData{
+				{"[anomaly] metric1.foo.bar.baz", 0, 1}: {types.MakeMetricData("[anomaly] metric1.foo.bar.baz", []float64{1, 2, 3, 4, 5}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("[anomaly] foo.bar",
+				[]float64{1, 2, 3, 4, 5}, 1, now32)},
+		},
+		{
 			parser.NewExpr("legendValue",
 				"metric1", parser.ArgValue("avg"),
 			),
