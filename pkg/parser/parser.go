@@ -140,7 +140,7 @@ func (e *expr) Metrics() []MetricRequest {
 				r[i].From += offs
 				r[i].Until += offs
 			}
-		case "timeStack":
+		case "timeStack", "baseline", "baselineAberration":
 			offs, err := e.GetIntervalArg(1, -1)
 			if err != nil {
 				return nil
@@ -165,6 +165,15 @@ func (e *expr) Metrics() []MetricRequest {
 						Until:  v.Until + (i * offs),
 					})
 				}
+
+				if start != 0 && e.target == "baselineAberration" {
+					r2 = append(r2, MetricRequest{
+						Metric: v.Metric,
+						From:   v.From,
+						Until:  v.Until,
+					})
+				}
+
 			}
 
 			return r2

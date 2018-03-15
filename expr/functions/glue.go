@@ -15,6 +15,7 @@ import (
 	"github.com/go-graphite/carbonapi/expr/functions/asPercent"
 	"github.com/go-graphite/carbonapi/expr/functions/averageSeries"
 	"github.com/go-graphite/carbonapi/expr/functions/averageSeriesWithWildcards"
+	"github.com/go-graphite/carbonapi/expr/functions/baselines"
 	"github.com/go-graphite/carbonapi/expr/functions/below"
 	"github.com/go-graphite/carbonapi/expr/functions/cactiStyle"
 	"github.com/go-graphite/carbonapi/expr/functions/cairo"
@@ -103,7 +104,7 @@ type initFunc struct {
 }
 
 func New(configs map[string]string) {
-	funcs := make([]initFunc, 0, 88)
+	funcs := make([]initFunc, 0, 89)
 
 	funcs = append(funcs, initFunc{name: "absolute", order: absolute.GetOrder(), f: absolute.New})
 
@@ -126,6 +127,8 @@ func New(configs map[string]string) {
 	funcs = append(funcs, initFunc{name: "averageSeries", order: averageSeries.GetOrder(), f: averageSeries.New})
 
 	funcs = append(funcs, initFunc{name: "averageSeriesWithWildcards", order: averageSeriesWithWildcards.GetOrder(), f: averageSeriesWithWildcards.New})
+
+	funcs = append(funcs, initFunc{name: "baselines", order: baselines.GetOrder(), f: baselines.New})
 
 	funcs = append(funcs, initFunc{name: "below", order: below.GetOrder(), f: below.New})
 
