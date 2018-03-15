@@ -504,6 +504,26 @@ func TestEvalExpression(t *testing.T) {
 			},
 		},
 		{
+			parser.NewExpr("aliasByBase64",
+				"metric1",
+			),
+			map[parser.MetricRequest][]*types.MetricData{
+				{"metric1", 0, 1}: {types.MakeMetricData("aGVsbG8=", []float64{1, 2, 3, 4, 5}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("hello",
+				[]float64{1, 2, 3, 4, 5}, 1, now32)},
+		},
+		{
+			parser.NewExpr("aliasByBase64",
+				"metric1",
+			),
+			map[parser.MetricRequest][]*types.MetricData{
+				{"metric1", 0, 1}: {types.MakeMetricData("bad", []float64{1, 2, 3, 4, 5}, 1, now32)},
+			},
+			[]*types.MetricData{types.MakeMetricData("bad",
+				[]float64{1, 2, 3, 4, 5}, 1, now32)},
+		},
+		{
 			parser.NewExpr("legendValue",
 				"metric1", parser.ArgValue("avg"),
 			),

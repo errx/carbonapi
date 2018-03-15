@@ -6,6 +6,9 @@ import (
 
 // IntervalString converts a sign and string into a number of seconds
 func IntervalString(s string, defaultSign int) (int32, error) {
+	if s == "now" {
+		return 0, nil
+	}
 
 	sign := defaultSign
 
