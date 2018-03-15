@@ -238,6 +238,11 @@ type graphiteConfig struct {
 	Prefix   string
 }
 
+type rewriteConfig struct {
+	From string
+	To   string
+}
+
 var config = struct {
 	ExtrapolateExperiment      bool               `mapstructure:"extrapolateExperiment"`
 	Logger                     []zapwriter.Config `mapstructure:"logger"`
@@ -261,6 +266,7 @@ var config = struct {
 	DefaultColors              map[string]string  `mapstructure:"defaultColors"`
 	GraphTemplates             string             `mapstructure:"graphTemplates"`
 	FunctionsConfigs           map[string]string  `mapstructure:"functionsConfig"`
+	Rewrite                    []rewriteConfig    `mapstructure:"rewrite"`
 
 	queryCache cache.BytesCache
 	findCache  cache.BytesCache
@@ -272,6 +278,9 @@ var config = struct {
 
 	// Limiter limits concurrent zipper requests
 	limiter limiter
+
+	// Rewriter rewrites queries before sending them to backend
+	rewriter rewriter
 }{
 	ExtrapolateExperiment: false,
 	Listen:                "[::]:8081",
@@ -442,6 +451,7 @@ func setUpConfig(logger *zap.Logger, zipper CarbonZipper) {
 	expvar.Publish("config", expvar.Func(func() interface{} { return config }))
 
 	config.limiter = newLimiter(config.Concurency)
+	config.rewriter = newRewriter(config.Rewrite)
 	config.zipper = zipper
 
 	switch config.Cache.Type {

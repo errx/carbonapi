@@ -257,6 +257,11 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 	var targetIdx = 0
 	for targetIdx < len(targets) {
 		var target = targets[targetIdx]
+		for k, v := range config.rewriter {
+			if strings.Contains(target, k) {
+				target = strings.Replace(target, k, v, 1)
+			}
+		}
 		targetIdx++
 
 		exp, e, err := parser.ParseExpr(target)
@@ -507,6 +512,12 @@ func findHandler(w http.ResponseWriter, r *http.Request) {
 		accessLogDetails.Reason = "missing parameter `query`"
 		logAsError = true
 		return
+	}
+
+	for k, v := range config.rewriter {
+		if strings.Contains(query, k) {
+			query = strings.Replace(query, k, v, 1)
+		}
 	}
 
 	if format == "" {
