@@ -1,12 +1,11 @@
 package expr
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
 	"unicode"
-
-	"fmt"
 
 	"github.com/go-graphite/carbonapi/expr/functions"
 	"github.com/go-graphite/carbonapi/expr/helper"
@@ -1656,6 +1655,26 @@ func TestEvalMultipleReturns(t *testing.T) {
 			"diffSeriesListSameGroups",
 			map[string][]*types.MetricData{
 				"diffSeries(metric1,metric1)": {types.MakeMetricData("diffSeries(metric1,metric1)", []float64{0, 0, 0, 0, 0}, 1, now32)},
+				"diffSeries(metric2,metric2)": {types.MakeMetricData("diffSeries(metric2,metric2)", []float64{0, 0, 0, 0, 0}, 1, now32)},
+			},
+		},
+		{
+			parser.NewExpr("diffSeriesLists",
+					"metric[12]",
+					"metric2",
+					"true",
+				),
+			map[parser.MetricRequest][]*types.MetricData{
+				{"metric[12]", 0, 1}: {
+					types.MakeMetricData("metric1", []float64{1, 2, 3, 4, 5}, 1, now32),
+					types.MakeMetricData("metric2", []float64{2, 4, 6, 8, 10}, 1, now32),
+				},
+				{"metric2", 0, 1}: {
+					types.MakeMetricData("metric2", []float64{2, 4, 6, 8, 10}, 1, now32),
+				},
+			},
+			"diffSeriesListMatching",
+			map[string][]*types.MetricData{
 				"diffSeries(metric2,metric2)": {types.MakeMetricData("diffSeries(metric2,metric2)", []float64{0, 0, 0, 0, 0}, 1, now32)},
 			},
 		},
