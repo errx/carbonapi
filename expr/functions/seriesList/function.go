@@ -2,11 +2,12 @@ package seriesList
 
 import (
 	"fmt"
+	"math"
+
 	"github.com/go-graphite/carbonapi/expr/helper"
 	"github.com/go-graphite/carbonapi/expr/interfaces"
 	"github.com/go-graphite/carbonapi/expr/types"
 	"github.com/go-graphite/carbonapi/pkg/parser"
-	"math"
 )
 
 type seriesList struct {
@@ -28,17 +29,36 @@ func New(configFile string) []interfaces.FunctionMetadata {
 }
 
 func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.MetricRequest][]*types.MetricData) ([]*types.MetricData, error) {
-	numerators, err := helper.GetSeriesArg(e.Args()[0], from, until, values)
-	if err != nil {
-		return nil, err
-	}
-	denominators, err := helper.GetSeriesArg(e.Args()[1], from, until, values)
+	defaultValue, err := e.GetFloatNamedOrPosArgDefault("default", 3, math.NaN())
 	if err != nil {
 		return nil, err
 	}
 
-	if len(numerators) != len(denominators) {
-		return nil, fmt.Errorf("both %s arguments must have equal length", e.Target())
+	useConstant := false
+	useDenom := false
+
+	numerators, err := helper.GetSeriesArg(e.Args()[0], from, until, values)
+	if err != nil {
+		if err == parser.ErrSeriesDoesNotExist && !math.IsNaN(defaultValue) {
+			useConstant = true
+			useDenom = true
+		} else {
+			return nil, err
+		}
+	}
+
+	denominators, err := helper.GetSeriesArg(e.Args()[1], from, until, values)
+	if err != nil {
+		if err == parser.ErrSeriesDoesNotExist && !math.IsNaN(defaultValue) && !useConstant {
+			useConstant = true
+		} else {
+			return nil, err
+		}
+	}
+	sizeMatch := len(denominators) == len(numerators) || len(denominators) == 1
+	useMatching, err := e.GetBoolNamedOrPosArgDefault("matching", 2, !useConstant && !sizeMatch)
+	if err != nil {
+		return nil, err
 	}
 
 	var results []*types.MetricData
@@ -56,8 +76,70 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 	case "powSeriesLists":
 		compute = func(l, r float64) float64 { return math.Pow(l, r) }
 	}
+
+	if useConstant {
+		var single []*types.MetricData
+		if useDenom {
+			single = denominators
+		} else {
+			single = numerators
+		}
+		for _, s := range single {
+			r := *s
+			r.Name = fmt.Sprintf("%s(%s,%s)", functionName, s.Name, s.Name)
+			r.Values = make([]float64, len(s.Values))
+			r.IsAbsent = make([]bool, len(s.Values))
+			for i, v := range s.Values {
+				if s.IsAbsent[i] {
+					r.IsAbsent[i] = true
+					continue
+				}
+
+				if e.Target() == "divideSeriesLists" {
+					if (useDenom && v == 0) || (!useDenom && defaultValue == 0) {
+						r.IsAbsent[i] = true
+						continue
+					}
+				}
+				if useDenom {
+					r.Values[i] = compute(defaultValue, v)
+				} else {
+					r.Values[i] = compute(v, defaultValue)
+				}
+
+			}
+			results = append(results, &r)
+		}
+		return results, nil
+	}
+
+	var denomMap map[string]*types.MetricData
+	if useMatching {
+		denomMap = make(map[string]*types.MetricData, len(denominators))
+		for _, s := range denominators {
+			denomMap[s.Name] = s
+		}
+	}
+
+	var (
+		denominator *types.MetricData
+		ok          bool
+	)
+
 	for i, numerator := range numerators {
-		denominator := denominators[i]
+		if useMatching {
+			denominator, ok = denomMap[numerator.Name]
+			if !ok {
+				continue
+			}
+		} else {
+			if len(denominators) == 1 {
+				denominator = denominators[0]
+			} else {
+				denominator = denominators[i]
+
+			}
+		}
 		if numerator.StepTime != denominator.StepTime || len(numerator.Values) != len(denominator.Values) {
 			return nil, fmt.Errorf("series %s must have the same length as %s", numerator.Name, denominator.Name)
 		}
@@ -88,6 +170,7 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 }
 
 // Description is auto-generated description, based on output of https://github.com/graphite-project/graphite-web
+// TODO add custom params
 func (f *seriesList) Description() map[string]types.FunctionDescription {
 	return map[string]types.FunctionDescription{
 		"divideSeriesLists": {
