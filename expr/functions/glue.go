@@ -88,6 +88,7 @@ import (
 	"github.com/go-graphite/carbonapi/expr/functions/summarize"
 	"github.com/go-graphite/carbonapi/expr/functions/timeFunction"
 	"github.com/go-graphite/carbonapi/expr/functions/timeShift"
+	"github.com/go-graphite/carbonapi/expr/functions/timeSlice"
 	"github.com/go-graphite/carbonapi/expr/functions/timeStack"
 	"github.com/go-graphite/carbonapi/expr/functions/transformNull"
 	"github.com/go-graphite/carbonapi/expr/functions/tukey"
@@ -102,7 +103,7 @@ type initFunc struct {
 }
 
 func New(configs map[string]string) {
-	funcs := make([]initFunc, 0, 87)
+	funcs := make([]initFunc, 0, 88)
 
 	funcs = append(funcs, initFunc{name: "absolute", order: absolute.GetOrder(), f: absolute.New})
 
@@ -271,6 +272,8 @@ func New(configs map[string]string) {
 	funcs = append(funcs, initFunc{name: "timeFunction", order: timeFunction.GetOrder(), f: timeFunction.New})
 
 	funcs = append(funcs, initFunc{name: "timeShift", order: timeShift.GetOrder(), f: timeShift.New})
+
+	funcs = append(funcs, initFunc{name: "timeSlice", order: timeSlice.GetOrder(), f: timeSlice.New})
 
 	funcs = append(funcs, initFunc{name: "timeStack", order: timeStack.GetOrder(), f: timeStack.New})
 
