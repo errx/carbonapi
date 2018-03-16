@@ -131,6 +131,9 @@ func (e *expr) Metrics() []MetricRequest {
 		}
 
 		switch e.target {
+		case "seriesByTag":
+			// pass seriesByTag to backend as is
+			r = append(r, MetricRequest{Metric: e.ToString()})
 		case "timeShift":
 			offs, err := e.GetIntervalArg(1, -1)
 			if err != nil {
