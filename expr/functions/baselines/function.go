@@ -146,11 +146,20 @@ func (f *baselines) Do(e parser.Expr, from, until int32, values map[parser.Metri
 	return results, nil
 }
 
+const baselineDescr = `Строит baseline, аргументы как и у timestack. берет для каждой метрики массив сдвинутых метрик и для каждой точки считает медиану.
+например: baseline(metric, "1w", 1, 4) - возьмет 4 значения метрики с интервалом 1 неделя и для каждой точки возьмет медиану
+необязательные параметры:
+   maxAbsentPercent - если процент пустых точек больше этого значения, то baseline не строится
+   minAvg - если среднее метрики ниже этого значения, то baseline не строится
+`
+
+const baselineAberrationDescr = `Отклонение от бейзлайна в долях. например, если текущее значение превысило бейзлайн на 10%, то значение метрики будет 1.1`
+
 func (f *baselines) Description() map[string]types.FunctionDescription {
 	return map[string]types.FunctionDescription{
 		"baseline": {
-			Description: "TODO",
-			Function:    "baseline(sourceSeriesList, factorSeriesList)",
+			Description: baselineDescr,
+			Function:    "baseline(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd, [maxAbsentPercent, minAvg])",
 			Group:       "Calculate",
 			Module:      "graphite.render.functions",
 			Name:        "baseline",
@@ -188,8 +197,8 @@ func (f *baselines) Description() map[string]types.FunctionDescription {
 			},
 		},
 		"baselineAberration": {
-			Description: "TODO",
-			Function:    "baselineAberration(sourceSeriesList, factorSeriesList)",
+			Description: baselineAberrationDescr,
+			Function:    "baselineAberration(seriesList, timeShiftUnit, timeShiftStart, timeShiftEnd, [maxAbsentPercent, minAvg])",
 			Group:       "Calculate",
 			Module:      "graphite.render.functions",
 			Name:        "baselineAberration",

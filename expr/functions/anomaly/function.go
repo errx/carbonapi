@@ -111,8 +111,11 @@ func (f *anomaly) Do(e parser.Expr, from, until int32, values map[parser.MetricR
 		return results, nil
 }
 
-const descr = `Takes a serieslist and TODO
-
+const descr = `Принимает на вход метрику (или массив метрик), выводит помимо метрик их аномальные точки.
+Параметр type, принимает значения:
+all - выводить все метрики и аномалии (дефолт)
+with_anomalies_only - выводить только метрики с аномалиями + аномалии
+only_anomalies - выводить только аномалии
 `
 
 func (f *anomaly) Description() map[string]types.FunctionDescription {
