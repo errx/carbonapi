@@ -251,14 +251,14 @@ var config = struct {
 	SendGlobsAsIs              bool               `yaml:"sendGlobsAsIs"`
 	MaxBatchSize               int                `yaml:"maxBatchSize"`
 	Zipper                     string             `yaml:"zipper"`
-	Upstreams                  realZipper.Config  `yaml:"upstreams"`
-	ExpireDelaySec             int32              `yaml:"expireDelaySec"`
-	GraphiteWeb09Compatibility bool               `yaml:"graphite09compat"`
-	IgnoreClientTimeout        bool               `yaml:"ignoreClientTimeout"`
-	DefaultColors              map[string]string  `yaml:"defaultColors"`
-	GraphTemplates             string             `yaml:"graphTemplates"`
-	FunctionsConfigs           map[string]string  `yaml:"functionsConfig"`
-	HttpTagDB                  tagdb.HttpConfig   `yaml:"httpTagDB"`
+	Upstreams                  realZipper.Config `yaml:"upstreams"`
+	ExpireDelaySec             int32             `yaml:"expireDelaySec"`
+	GraphiteWeb09Compatibility bool              `yaml:"graphite09compat"`
+	IgnoreClientTimeout        bool              `yaml:"ignoreClientTimeout"`
+	DefaultColors              map[string]string `yaml:"defaultColors"`
+	GraphTemplates             string            `yaml:"graphTemplates"`
+	FunctionsConfigs           map[string]string `yaml:"functionsConfig"`
+	HttpTagDB                  tagdb.HttpConfig  `mapstructure:"httpTagDB"`
 
 	queryCache cache.BytesCache
 	findCache  cache.BytesCache
@@ -269,8 +269,9 @@ var config = struct {
 	zipper CarbonZipper
 
 	// Limiter limits concurrent zipper requests
-	limiter    limiter
+	limiter limiter
 
+	httpTagDb *tagdb.HttpDB
 }{
 	ExtrapolateExperiment: false,
 	Listen:                "[::]:8081",
@@ -313,7 +314,6 @@ var config = struct {
 
 	HttpTagDB: tagdb.HttpConfig{
 		MaxConcurrentConnections: 10,
-		MaxTries:                 3,
 		Timeout:                  60 * time.Second,
 		KeepAliveInterval:        30 * time.Second,
 	},
@@ -449,7 +449,7 @@ func setUpConfig(logger *zap.Logger, zipper CarbonZipper) {
 	config.limiter = newLimiter(config.Concurency)
 	config.zipper = zipper
 
-	config.HttpTagDB = tagdb.NewHttpTagDb(config.HttpTagDB)
+	config.httpTagDb = tagdb.NewHttpTagDb(config.HttpTagDB)
 
 	switch config.Cache.Type {
 	case "memcache":

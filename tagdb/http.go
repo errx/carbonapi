@@ -13,18 +13,24 @@ type HttpDB struct {
 }
 
 type HttpConfig struct {
-	MaxConcurrentConnections int
-	MaxTries                 int
-	Timeout                  time.Duration
-	KeepAliveInterval        time.Duration
-	Url                      string
-	User                     string
-	Password                 string
-	ForwardHeaders           bool
+	MaxConcurrentConnections int           `yaml:"maxConcurrentConnections"`
+	Timeout                  time.Duration `yaml:"timeout"`
+	KeepAliveInterval        time.Duration `yaml:"keepAliveInterval"`
+	Url                      string        `yaml:"url"`
+	User                     string        `yaml:"user"`
+	Password                 string        `yaml:"password"`
+	ForwardHeaders           bool          `yaml:"forwardHeaders"`
 }
 
 func NewHttpTagDb(cfg HttpConfig) *HttpDB {
-	target, _ := url.Parse(cfg.Url)
+	if cfg.Url == "" {
+		return nil
+	}
+	target, err := url.Parse(cfg.Url)
+	// TODO logging
+	if err != nil {
+		return nil
+	}
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	proxy.Transport = &http.Transport{
@@ -57,4 +63,3 @@ func NewHttpTagDb(cfg HttpConfig) *HttpDB {
 func (h *HttpDB) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.proxy.ServeHTTP(w, r)
 }
-

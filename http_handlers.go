@@ -889,8 +889,8 @@ func functionsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func tagHandler(w http.ResponseWriter, r *http.Request) {
-	if config.tagDBProxy != nil {
-		config.tagDBProxy.ServeHTTP(w, r)
+	if config.httpTagDb != nil {
+		config.httpTagDb.ServeHTTP(w, r)
 	}
 	w.Write([]byte{})
 }
