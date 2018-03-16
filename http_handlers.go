@@ -58,6 +58,9 @@ func initHandlers() *http.ServeMux {
 	r.HandleFunc("/functions", functionsHandler)
 	r.HandleFunc("/functions/", functionsHandler)
 
+	r.HandleFunc("/tags", tagHandler)
+	r.HandleFunc("/tags/", tagHandler)
+
 	r.HandleFunc("/", usageHandler)
 	return r
 }
@@ -885,12 +888,20 @@ func functionsHandler(w http.ResponseWriter, r *http.Request) {
 	accessLogger.Info("request served", zap.Any("data", accessLogDetails))
 }
 
+func tagHandler(w http.ResponseWriter, r *http.Request) {
+	if config.tagDBProxy != nil {
+		config.tagDBProxy.ServeHTTP(w, r)
+	}
+	w.Write([]byte{})
+}
+
 var usageMsg = []byte(`
 supported requests:
 	/render/?target=
 	/metrics/find/?query=
 	/info/?target=
 	/functions/
+	/tags/
 `)
 
 func usageHandler(w http.ResponseWriter, r *http.Request) {
