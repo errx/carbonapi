@@ -6,6 +6,7 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -16,14 +17,14 @@ import (
 	"time"
 	"unicode"
 
-	"io/ioutil"
-
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/facebookgo/pidfile"
 	"github.com/go-graphite/carbonapi/carbonapipb"
 	"github.com/go-graphite/carbonapi/expr/functions/cairo/png"
 	"github.com/go-graphite/carbonapi/expr/helper"
 	"github.com/go-graphite/carbonapi/pkg/parser"
+	"github.com/go-graphite/carbonapi/tagdb"
+	"github.com/go-graphite/carbonapi/util"
 	"github.com/go-graphite/carbonzipper/cache"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/go-graphite/carbonzipper/mstats"
@@ -259,6 +260,7 @@ var config = struct {
 	DefaultColors              map[string]string  `mapstructure:"defaultColors"`
 	GraphTemplates             string             `mapstructure:"graphTemplates"`
 	FunctionsConfigs           map[string]string  `mapstructure:"functionsConfig"`
+	TagDBHttpConfig            tagdb.HttpConfig   `mapstructure:"tagDB"`
 
 	queryCache cache.BytesCache
 	findCache  cache.BytesCache
@@ -269,7 +271,9 @@ var config = struct {
 	zipper CarbonZipper
 
 	// Limiter limits concurrent zipper requests
-	limiter limiter
+	limiter util.SimpleLimiter
+
+	tagDBProxy *tagdb.Http
 }{
 	ExtrapolateExperiment: false,
 	Listen:                "[::]:8081",
@@ -310,6 +314,13 @@ var config = struct {
 	},
 	ExpireDelaySec:             10 * 60,
 	GraphiteWeb09Compatibility: false,
+
+	TagDB: tagdb.HttpConfig{
+		MaxConcurrentConnections: 10,
+		MaxTries:                 3,
+		Timeout:                  60 * time.Second,
+		KeepAliveInterval:        30 * time.Second,
+	},
 }
 
 func zipperStats(stats *realZipper.Stats) {
@@ -439,7 +450,17 @@ func setUpConfig(logger *zap.Logger, zipper CarbonZipper) {
 	expvar.NewString("BuildVersion").Set(BuildVersion)
 	expvar.Publish("config", expvar.Func(func() interface{} { return config }))
 
-	config.limiter = newLimiter(config.Concurency)
+	config.limiter = util.NewSimpleLimiter(config.Concurency)
+	if config.TagDBHttpConfig.Url != "" {
+		config.tagDBProxy, err = tagdb.NewHttp(&config.TagDBHttpConfig)
+		if err != nil {
+			logger.Warn("failed to initialize http tag db",
+				zap.String("reason", "invalid url"),
+				zap.Error(err),
+			)
+		}
+	}
+
 	config.zipper = zipper
 
 	switch config.Cache.Type {
