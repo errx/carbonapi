@@ -260,7 +260,7 @@ var config = struct {
 	DefaultColors              map[string]string  `mapstructure:"defaultColors"`
 	GraphTemplates             string             `mapstructure:"graphTemplates"`
 	FunctionsConfigs           map[string]string  `mapstructure:"functionsConfig"`
-	TagDBHttpConfig            tagdb.HttpConfig   `mapstructure:"tagDB"`
+	TagDB                      tagdb.Config       `mapstructure:"tagDB"`
 
 	queryCache cache.BytesCache
 	findCache  cache.BytesCache
@@ -315,7 +315,7 @@ var config = struct {
 	ExpireDelaySec:             10 * 60,
 	GraphiteWeb09Compatibility: false,
 
-	TagDB: tagdb.HttpConfig{
+	TagDB: tagdb.Config{
 		MaxConcurrentConnections: 10,
 		MaxTries:                 3,
 		Timeout:                  60 * time.Second,

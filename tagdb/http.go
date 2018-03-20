@@ -15,7 +15,9 @@ type Http struct {
 	limiter util.SimpleLimiter
 }
 
-type HttpConfig struct {
+
+type Config struct {
+	Type string
 	MaxConcurrentConnections int
 	MaxTries                 int
 	Timeout                  time.Duration
@@ -26,8 +28,9 @@ type HttpConfig struct {
 	ForwardHeaders           bool
 }
 
-func NewHttp(cfg *HttpConfig) (*Http, error) {
+func NewHttp(cfg *Config) (*Http, error) {
 	if cfg.Url == "" {
+		// return error TODO
 		return nil, nil
 	}
 	target, err := url.Parse(cfg.Url)
