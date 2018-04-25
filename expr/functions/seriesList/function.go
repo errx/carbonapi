@@ -3,6 +3,7 @@ package seriesList
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/go-graphite/carbonapi/expr/helper"
 	"github.com/go-graphite/carbonapi/expr/interfaces"
@@ -137,15 +138,13 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 		}
 	}
 
-	var (
-		denominator *types.MetricData
-		ok          bool
-	)
+	var denominator *types.MetricData
 
 	for i, numerator := range numerators {
+		pairFound := false
 		if useMatching {
-			denominator, ok = denomMap[numerator.Name]
-			if !ok {
+			denominator, pairFound = denomMap[numerator.Name]
+			if !pairFound && math.IsNaN(defaultValue) {
 				continue
 			}
 		} else {
@@ -153,20 +152,34 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 				denominator = denominators[0]
 			} else {
 				denominator = denominators[i]
-
 			}
 		}
-		if numerator.StepTime != denominator.StepTime || len(numerator.Values) != len(denominator.Values) {
-			return nil, fmt.Errorf("series %s must have the same length as %s", numerator.Name, denominator.Name)
+		if pairFound {
+			if numerator.StepTime != denominator.StepTime || len(numerator.Values) != len(denominator.Values) {
+				return nil, fmt.Errorf("series %s must have the same length as %s", numerator.Name, denominator.Name)
+			}
 		}
 		r := *numerator
-		r.Name = fmt.Sprintf("%s(%s,%s)", functionName, numerator.Name, denominator.Name)
+		var denomName string
+		if pairFound {
+			denomName = denominator.Name
+		} else {
+			denomName = strconv.FormatFloat(defaultValue, 'f', -1, 64)
+		}
+		r.Name = fmt.Sprintf("%s(%s,%s)", functionName, numerator.Name, denomName)
 		r.Values = make([]float64, len(numerator.Values))
 		r.IsAbsent = make([]bool, len(numerator.Values))
+
 		for i, v := range numerator.Values {
-			if numerator.IsAbsent[i] || denominator.IsAbsent[i] {
+			denomIsAbsent := pairFound && denominator.IsAbsent[i]
+			if numerator.IsAbsent[i] || denomIsAbsent {
 				r.IsAbsent[i] = true
 				continue
+			}
+
+			denomValue := defaultValue
+			if pairFound {
+				denomValue = denominator.Values[i]
 			}
 
 			switch e.Target() {
@@ -175,9 +188,9 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 					r.IsAbsent[i] = true
 					continue
 				}
-				r.Values[i] = compute(v, denominator.Values[i])
+				r.Values[i] = compute(v, denomValue)
 			default:
-				r.Values[i] = compute(v, denominator.Values[i])
+				r.Values[i] = compute(v, denomValue)
 			}
 		}
 		results = append(results, &r)
