@@ -46,6 +46,14 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 			return nil, err
 		}
 	}
+	if len(numerators) == 0 {
+		if !math.IsNaN(defaultValue) {
+			useConstant = true
+			useDenom = true
+		} else {
+			return nil, nil
+		}
+	}
 
 	denominators, err := helper.GetSeriesArg(e.Args()[1], from, until, values)
 	if err != nil {
@@ -55,6 +63,14 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 			return nil, err
 		}
 	}
+	if len(denominators) == 0 {
+		if !math.IsNaN(defaultValue) && !useConstant {
+			useConstant = true
+		} else {
+			return nil, nil
+		}
+	}
+
 	sizeMatch := len(denominators) == len(numerators) || len(denominators) == 1
 	useMatching, err := e.GetBoolNamedOrPosArgDefault("matching", 2, !useConstant && !sizeMatch)
 	if err != nil {
