@@ -148,6 +148,7 @@ func (f *seriesList) Do(e parser.Expr, from, until int32, values map[parser.Metr
 				continue
 			}
 		} else {
+			pairFound = true
 			if len(denominators) == 1 {
 				denominator = denominators[0]
 			} else {
