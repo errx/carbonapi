@@ -464,8 +464,8 @@ func setUpConfig(logger *zap.Logger, zipper CarbonZipper) {
 
 	config.rewriter = newRewriter(config.Rewrite)
 	config.limiter = util.NewSimpleLimiter(config.Concurency)
-	if config.TagDBHttpConfig.Url != "" {
-		config.tagDBProxy, err = tagdb.NewHttp(&config.TagDBHttpConfig)
+	if config.TagDB.Url != "" {
+		config.tagDBProxy, err = tagdb.NewHttp(&config.TagDB)
 		if err != nil {
 			logger.Warn("failed to initialize http tag db",
 				zap.String("reason", "invalid url"),

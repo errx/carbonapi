@@ -1,6 +1,8 @@
 package tagdb
 
 import (
+	"bytes"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -15,9 +17,7 @@ type Http struct {
 	limiter util.SimpleLimiter
 }
 
-
 type Config struct {
-	Type string
 	MaxConcurrentConnections int
 	MaxTries                 int
 	Timeout                  time.Duration
@@ -28,9 +28,19 @@ type Config struct {
 	ForwardHeaders           bool
 }
 
+func modResp(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		// TODO log msg
+		resp.StatusCode = 200
+		resp.Body = ioutil.NopCloser(bytes.NewBufferString(""))
+		resp.ContentLength = 0
+	}
+	return nil
+}
+
 func NewHttp(cfg *Config) (*Http, error) {
 	if cfg.Url == "" {
-		// return error TODO
+		// TODO log msg
 		return nil, nil
 	}
 	target, err := url.Parse(cfg.Url)
@@ -47,6 +57,8 @@ func NewHttp(cfg *Config) (*Http, error) {
 			DualStack: true,
 		}).DialContext,
 	}
+
+	proxy.ModifyResponse = modResp
 
 	origDirector := proxy.Director
 
