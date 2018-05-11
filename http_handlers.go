@@ -9,9 +9,6 @@ import (
 	"strings"
 	"time"
 
-	pickle "github.com/lomik/og-rek"
-	"github.com/satori/go.uuid"
-
 	"github.com/go-graphite/carbonapi/carbonapipb"
 	"github.com/go-graphite/carbonapi/date"
 	"github.com/go-graphite/carbonapi/expr"
@@ -21,6 +18,8 @@ import (
 	"github.com/go-graphite/carbonapi/util"
 	pb "github.com/go-graphite/carbonzipper/carbonzipperpb3"
 	"github.com/go-graphite/carbonzipper/intervalset"
+	pickle "github.com/lomik/og-rek"
+	"github.com/satori/go.uuid"
 
 	"github.com/go-graphite/carbonapi/expr/metadata"
 	"github.com/lomik/zapwriter"
@@ -57,6 +56,9 @@ func initHandlers() *http.ServeMux {
 
 	r.HandleFunc("/functions", functionsHandler)
 	r.HandleFunc("/functions/", functionsHandler)
+
+	r.HandleFunc("/tags", tagHandler)
+	r.HandleFunc("/tags/", tagHandler)
 
 	r.HandleFunc("/", usageHandler)
 	return r
@@ -333,16 +335,16 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 				// Request is "small enough" -- send the entire thing as a render request
 
 				apiMetrics.RenderRequests.Add(1)
-				config.limiter.enter()
+				config.limiter.Enter()
 				accessLogDetails.ZipperRequests++
 
 				r, err := config.zipper.Render(ctx, m.Metric, mfetch.From, mfetch.Until)
 				if err != nil {
 					errors[target] = err.Error()
-					config.limiter.leave()
+					config.limiter.Leave()
 					continue
 				}
-				config.limiter.leave()
+				config.limiter.Leave()
 				metricMap[mfetch] = r
 				for i := range r {
 					size += r[i].Size()
@@ -360,7 +362,7 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 					leaves++
 
 					apiMetrics.RenderRequests.Add(1)
-					config.limiter.enter()
+					config.limiter.Enter()
 					accessLogDetails.ZipperRequests++
 
 					go func(path string, from, until int32) {
@@ -369,7 +371,7 @@ func renderHandler(w http.ResponseWriter, r *http.Request) {
 						} else {
 							rch <- renderResponse{nil, err}
 						}
-						config.limiter.leave()
+						config.limiter.Leave()
 					}(m.Path, mfetch.From, mfetch.Until)
 				}
 
@@ -905,12 +907,21 @@ func functionsHandler(w http.ResponseWriter, r *http.Request) {
 	accessLogger.Info("request served", zap.Any("data", accessLogDetails))
 }
 
+func tagHandler(w http.ResponseWriter, r *http.Request) {
+	if config.tagDBProxy != nil {
+		config.tagDBProxy.ServeHTTP(w, r)
+	}
+	w.Header().Set("Content-Type", contentTypeJSON)
+	w.Write([]byte{'[', ']'})
+}
+
 var usageMsg = []byte(`
 supported requests:
 	/render/?target=
 	/metrics/find/?query=
 	/info/?target=
 	/functions/
+	/tags/
 `)
 
 func usageHandler(w http.ResponseWriter, r *http.Request) {
