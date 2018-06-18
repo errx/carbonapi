@@ -58,6 +58,12 @@ func (f *baselines) Do(e parser.Expr, from, until int32, values map[parser.Metri
 		return nil, err
 	}
 
+	current := make(map[string]*types.MetricData)
+	arg, _ := helper.GetSeriesArg(e.Args()[0], from, until, values)
+	for _, a := range arg {
+		current[a.Name] = a
+	}
+
 	var results []*types.MetricData
 	groups := make(map[string][]*types.MetricData)
 	for i := int32(start); i < int32(end); i++ {
@@ -68,17 +74,15 @@ func (f *baselines) Do(e parser.Expr, from, until int32, values map[parser.Metri
 		arg, _ := helper.GetSeriesArg(e.Args()[0], from+offs, until+offs, values)
 		for _, a := range arg {
 			r := *a
-			r.StartTime = a.StartTime - offs
-			r.StopTime = a.StopTime - offs
-			groups[r.Name] = append(groups[r.Name], &r)
+			if _, ok := current[r.Name]; ok {
+				r.StartTime = a.StartTime - offs
+				r.StopTime = a.StopTime - offs
+				groups[r.Name] = append(groups[r.Name], &r)
+
+			}
 		}
 	}
 
-	current := make(map[string]*types.MetricData)
-	arg, _ := helper.GetSeriesArg(e.Args()[0], from, until, values)
-	for _, a := range arg {
-		current[a.Name] = a
-	}
 
 	for name, args := range groups {
 		r := *args[0]
