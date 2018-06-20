@@ -10,6 +10,7 @@ import (
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByHash"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByMetric"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasByNode"
+	"github.com/go-graphite/carbonapi/expr/functions/aliasByTags"
 	"github.com/go-graphite/carbonapi/expr/functions/aliasSub"
 	"github.com/go-graphite/carbonapi/expr/functions/anomaly"
 	"github.com/go-graphite/carbonapi/expr/functions/asPercent"
@@ -105,7 +106,7 @@ type initFunc struct {
 }
 
 func New(configs map[string]string) {
-	funcs := make([]initFunc, 0, 90)
+	funcs := make([]initFunc, 0, 91)
 
 	funcs = append(funcs, initFunc{name: "absolute", order: absolute.GetOrder(), f: absolute.New})
 
@@ -118,6 +119,8 @@ func New(configs map[string]string) {
 	funcs = append(funcs, initFunc{name: "aliasByMetric", order: aliasByMetric.GetOrder(), f: aliasByMetric.New})
 
 	funcs = append(funcs, initFunc{name: "aliasByNode", order: aliasByNode.GetOrder(), f: aliasByNode.New})
+
+	funcs = append(funcs, initFunc{name: "aliasByTags", order: aliasByTags.GetOrder(), f: aliasByTags.New})
 
 	funcs = append(funcs, initFunc{name: "aliasSub", order: aliasSub.GetOrder(), f: aliasSub.New})
 
