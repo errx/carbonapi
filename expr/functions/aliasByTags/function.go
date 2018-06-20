@@ -99,7 +99,7 @@ func (f *aliasByTags) Description() map[string]types.FunctionDescription {
 					Multiple: true,
 					Name:     "nodes",
 					Required: true,
-					Type:     types.NodeOrTag,
+					Type:     types.Tag,
 				},
 			},
 		},
