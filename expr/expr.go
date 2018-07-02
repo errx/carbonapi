@@ -4578,6 +4578,9 @@ func EvalExpr(e *expr, from, until int32, values map[MetricRequest][]*MetricData
 			}
 		}
 		return results, nil
+	case "seriesByTag", "aliasByTags":
+		results := make([]*MetricData, 0)
+		return results, nil
 
 	case "removeBelowValue", "removeAboveValue", "removeBelowPercentile", "removeAbovePercentile": // removeBelowValue(seriesLists, n), removeAboveValue(seriesLists, n), removeBelowPercentile(seriesLists, percent), removeAbovePercentile(seriesLists, percent)
 		args, err := getSeriesArg(e.args[0], from, until, values)
