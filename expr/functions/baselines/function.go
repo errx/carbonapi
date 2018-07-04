@@ -74,15 +74,13 @@ func (f *baselines) Do(e parser.Expr, from, until int32, values map[parser.Metri
 		arg, _ := helper.GetSeriesArg(e.Args()[0], from+offs, until+offs, values)
 		for _, a := range arg {
 			r := *a
-			if _, ok := current[r.Name]; ok {
+			if _, ok := current[r.Name]; ok || !isAberration {
 				r.StartTime = a.StartTime - offs
 				r.StopTime = a.StopTime - offs
 				groups[r.Name] = append(groups[r.Name], &r)
-
 			}
 		}
 	}
-
 
 	for name, args := range groups {
 		r := *args[0]
