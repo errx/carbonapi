@@ -33,6 +33,7 @@ import (
 	"github.com/go-graphite/carbonapi/expr/functions/exclude"
 	"github.com/go-graphite/carbonapi/expr/functions/fallbackSeries"
 	"github.com/go-graphite/carbonapi/expr/functions/fft"
+	"github.com/go-graphite/carbonapi/expr/functions/weightedAverageByFilteredCount"
 	"github.com/go-graphite/carbonapi/expr/functions/graphiteWeb"
 	"github.com/go-graphite/carbonapi/expr/functions/grep"
 	"github.com/go-graphite/carbonapi/expr/functions/group"
@@ -106,7 +107,7 @@ type initFunc struct {
 }
 
 func New(configs map[string]string) {
-	funcs := make([]initFunc, 0, 91)
+	funcs := make([]initFunc, 0, 92)
 
 	funcs = append(funcs, initFunc{name: "absolute", order: absolute.GetOrder(), f: absolute.New})
 
@@ -289,6 +290,8 @@ func New(configs map[string]string) {
 	funcs = append(funcs, initFunc{name: "transformNull", order: transformNull.GetOrder(), f: transformNull.New})
 
 	funcs = append(funcs, initFunc{name: "tukey", order: tukey.GetOrder(), f: tukey.New})
+
+	funcs = append(funcs, initFunc{name: "weightedAverageByFilteredCount", order: weightedAverageByFilteredCount.GetOrder(), f: weightedAverageByFilteredCount.New})
 
 	sort.Slice(funcs, func(i, j int) bool {
 		if funcs[i].order == interfaces.Any && funcs[j].order == interfaces.Last {

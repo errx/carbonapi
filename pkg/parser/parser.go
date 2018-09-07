@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/go-graphite/carbonapi/util/statsd"
 )
 
 // expression parser
@@ -200,6 +202,15 @@ func (e *expr) Metrics() []MetricRequest {
 			for _, v := range r {
 				r = append(r, MetricRequest{
 					Metric: anomalyPrefix + v.Metric,
+					From:   v.From,
+					Until:  v.Until,
+				})
+			}
+
+		case "weightedAverageByFilteredCount":
+			for _, v := range r {
+				r = append(r, MetricRequest{
+					Metric: statsd.CountSuffixMetric(v.Metric),
 					From:   v.From,
 					Until:  v.Until,
 				})
