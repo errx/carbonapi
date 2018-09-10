@@ -41,30 +41,11 @@ func trimmedSuffixSeriesMap(series []*types.MetricData, suffix string) map[strin
 	return seriesMap
 }
 
-func filterSeries(series []*types.MetricData, threshold float64) []*types.MetricData {
-	filtered := make([]*types.MetricData, 0, len(series))
-	for _, s := range series {
-		skip := true
-		for i, v := range s.Values {
-			if !s.IsAbsent[i] {
-				if v > threshold {
-					skip = false
-					break
-				}
-			}
-		}
-		if !skip {
-			filtered = append(filtered, s)
-		}
-	}
-	return filtered
-}
-
-func sumSeries(series []*types.MetricData) []float64 {
+func sumSeries(series []*types.MetricData, threshold float64) []float64 {
 	sumCount := make([]float64, len(series[0].Values))
 	for _, s := range series {
 		for i, v := range s.Values {
-			if !s.IsAbsent[i] {
+			if !s.IsAbsent[i] && (v > threshold) {
 				sumCount[i] += v
 			}
 		}
@@ -126,10 +107,6 @@ func (f *weightedAverageByFilteredCount) Do(e parser.Expr, from, until int32, va
 		return nil, errors.New(".count metric not found")
 	}
 
-	if threshold > 0 {
-		seriesListCount = filterSeries(seriesListCount, threshold)
-	}
-
 	if len(seriesListCount) == 0 {
 		return nil, errors.New(".count metric not found/or filtered")
 	}
@@ -161,7 +138,7 @@ func (f *weightedAverageByFilteredCount) Do(e parser.Expr, from, until int32, va
 func do1(seriesList, seriesListCount []*types.MetricData, suffix, group string, threshold float64) (*types.MetricData, error) {
 	seriesMap := trimmedSuffixSeriesMap(seriesList, suffix)
 	seriesCountMap := trimmedSuffixSeriesMap(seriesListCount, statsd.CountSuffix)
-	sumCount := sumSeries(seriesListCount)
+	sumCount := sumSeries(seriesListCount, threshold)
 
 	r := *seriesList[0]
 	r.Name = fmt.Sprintf("weightedAverageByFilteredCount(%s, %s)", group, strconv.FormatFloat(threshold, 'f', -1, 64))
@@ -170,6 +147,9 @@ func do1(seriesList, seriesListCount []*types.MetricData, suffix, group string, 
 
 	for i := 0; i < len(seriesList[0].Values); i++ {
 		r.IsAbsent[i] = true
+		if sumCount[i] == 0 {
+			continue
+		}
 		for name, s := range seriesMap {
 			cnt, ok := seriesCountMap[name]
 			if !ok {
@@ -183,7 +163,7 @@ func do1(seriesList, seriesListCount []*types.MetricData, suffix, group string, 
 				return nil, fmt.Errorf("different series lengths")
 			}
 
-			if !(cnt.IsAbsent[i] || s.IsAbsent[i]) {
+			if !(cnt.IsAbsent[i] || s.IsAbsent[i]) && (cnt.Values[i] > threshold) {
 				r.Values[i] += cnt.Values[i] * s.Values[i]
 				r.IsAbsent[i] = false
 			}
