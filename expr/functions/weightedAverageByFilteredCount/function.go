@@ -34,7 +34,8 @@ func New(configFile string) []interfaces.FunctionMetadata {
 func trimmedSuffixSeriesMap(series []*types.MetricData, suffix string) map[string]*types.MetricData {
 	seriesMap := make(map[string]*types.MetricData, len(series))
 	for _, s := range series {
-		name := strings.TrimSuffix(s.Name, suffix)
+		metric := helper.ExtractMetric(s.Name)
+		name := strings.TrimSuffix(metric, suffix)
 		seriesMap[name] = s
 	}
 	return seriesMap
@@ -110,8 +111,12 @@ func (f *weightedAverageByFilteredCount) Do(e parser.Expr, from, until int32, va
 	if err != nil {
 		return nil, err
 	}
+	e0 := e.Args()[0]
+	for e0.IsFunc() {
+		e0 = e0.Args()[0]
+	}
+	target := e0.Target()
 
-	target := e.Args()[0].Target()
 	suffix := statsd.GetSuffix(target)
 	cntTarget := strings.TrimSuffix(target, suffix) + statsd.CountSuffix
 
